@@ -1,24 +1,6 @@
 import type { NextApiRequest, NextApiResponse } from 'next'
-import { OpenAI } from 'openai'
-import { getImageHash, getCachedResponse, cacheResponse, getFallbackFutureData } from '../../lib/cache'
-
-const openai = new OpenAI({
-  apiKey: process.env.OPENAI_API_KEY,
-})
-
-type FutureResponse = {
-  futureImage: string;
-  analysis: {
-    projectionDate: string;
-    vegetationGrowth: string;
-    potentialIssues: Array<{
-      component: string;
-      risk: string;
-      description: string;
-    }>;
-    recommendations: string[];
-  };
-}
+import { isOnline, getFallbackFutureData } from '../../lib/cache'
+import { generateFuture, FutureResult } from '../../lib/openai'
 
 type ErrorResponse = {
   error: string;
@@ -26,7 +8,7 @@ type ErrorResponse = {
 
 export default async function handler(
   req: NextApiRequest,
-  res: NextApiResponse<FutureResponse | ErrorResponse>
+  res: NextApiResponse<FutureResult | ErrorResponse>
 ) {
   if (req.method !== 'POST') {
     return res.status(405).json({ error: 'Method not allowed' })
@@ -38,51 +20,34 @@ export default async function handler(
       return res.status(400).json({ error: 'Image is required' })
     }
     
-    // Check cache first
-    const imageHash = getImageHash(image)
-    const cachedResult = getCachedResponse('future', imageHash)
-    
-    if (cachedResult) {
-      return res.status(200).json(cachedResult)
+    // If demo mode is enabled or we're offline, use fallback data
+    if (process.env.NEXT_PUBLIC_DEMO_MODE === 'true' || !isOnline()) {
+      // For demo purposes, we use the original image
+      return res.status(200).json({
+        futureImage: image,
+        analysis: getFallbackFutureData()
+      })
     }
     
-    // For demo reliability, we'll use a pre-generated future image
-    // In a real implementation, we would call OpenAI API here to generate the future image
-    /* 
-    // Call OpenAI API to generate future image
-    const response = await openai.images.generate({
-      model: "dall-e-3",
-      prompt: "Generate a future version of this electrical infrastructure image showing 5-year vegetation growth around the components. Show trees and vegetation that have grown considerably and may pose risks to the electrical equipment.",
-      n: 1,
-      size: "1024x1024",
-    })
-    
-    const futureImageUrl = response.data[0].url
-    // We would need to convert the URL to base64 for storing in our demo
-    */
-    
-    // For the demo, use a pre-generated future image
-    // In a real app, we'd generate this with OpenAI
-    const futureImage = image // Replace with actual modified image
-    
-    const fallbackData = {
-      futureImage,
-      analysis: getFallbackFutureData()
+    // Process the image with OpenAI for future projection
+    try {
+      const result = await generateFuture(image)
+      return res.status(200).json(result)
+    } catch (apiError) {
+      console.error('Error from OpenAI API:', apiError)
+      // Fall back to demo data on API error
+      return res.status(200).json({
+        futureImage: image,
+        analysis: getFallbackFutureData()
+      })
     }
-    
-    // Cache the result
-    cacheResponse('future', imageHash, fallbackData)
-    
-    return res.status(200).json(fallbackData)
   } catch (error) {
     console.error('Error generating future projection:', error)
     
     // Return fallback data for demo reliability
-    const fallbackData = {
-      futureImage: req.body.image, // Just use the original image for the demo
+    return res.status(200).json({
+      futureImage: req.body.image,
       analysis: getFallbackFutureData()
-    }
-    
-    return res.status(200).json(fallbackData)
+    })
   }
 }
