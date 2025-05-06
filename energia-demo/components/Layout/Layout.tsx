@@ -1,6 +1,13 @@
 import { ReactNode } from 'react'
 import Head from 'next/head'
 import { useRouter } from 'next/router'
+import dynamic from 'next/dynamic'
+
+// Import DemoModeIndicator with client-side only rendering
+const DemoModeIndicator = dynamic(
+  () => import('../DemoModeIndicator'),
+  { ssr: false }
+)
 
 type LayoutProps = {
   children: ReactNode
@@ -53,6 +60,9 @@ const Layout = ({ children, title = 'ÉnergIA' }: LayoutProps) => {
       <main className="flex-grow px-4 pt-4 pb-20">
         {children}
       </main>
+      
+      {/* Demo mode indicator */}
+      <DemoModeIndicator position="bottom-right" />
       
       <footer className="bg-gray-800 text-white py-4 px-4">
         <div className="max-w-6xl mx-auto">

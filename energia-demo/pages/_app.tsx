@@ -14,10 +14,10 @@ function MyApp({ Component, pageProps }: AppProps) {
     // Initialize cache with pre-cached responses
     initializeCache()
     
-    // Initialize demo mode with test images
-    if (process.env.NEXT_PUBLIC_DEMO_MODE === 'true') {
-      initializeDemoMode()
-    }
+    // Always initialize demo mode to set up keyboard shortcuts
+    // Demo mode will only activate fully if it's enabled in the config
+    // or if triggered manually by the user
+    initializeDemoMode()
   }, [])
   
   return <Component {...pageProps} />

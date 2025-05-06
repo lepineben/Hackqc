@@ -33,6 +33,12 @@ export type OpenAIAnnotation = {
 export type AnalysisResult = {
   components: OpenAIComponent[];
   annotations: OpenAIAnnotation[];
+  meta?: {
+    timestamp: number;
+    source: string;
+    model?: string;
+    version?: string;
+  };
 };
 
 export type FutureAnalysis = {
@@ -44,11 +50,21 @@ export type FutureAnalysis = {
     description: string;
   }>;
   recommendations: string[];
+  meta?: {
+    timestamp: number;
+    source: string;
+    version?: string;
+  };
 };
 
 export type FutureResult = {
   futureImage: string;
   analysis: FutureAnalysis;
+  meta?: {
+    timestamp: number;
+    source: string;
+    version?: string;
+  };
 };
 
 // Helper function to extract components from OpenAI text response
@@ -137,10 +153,12 @@ export async function analyzeImage(imageData: string): Promise<AnalysisResult> {
   const cachedResult = getCachedResponse('analyze', imageHash);
   
   if (cachedResult) {
+    console.log('Using cached analysis result');
     return cachedResult;
   }
   
   try {
+    console.log('Analyzing image with OpenAI Vision API...');
     // Call OpenAI API
     const response = await openai.chat.completions.create({
       model: "gpt-4-vision-preview",
@@ -182,11 +200,18 @@ export async function analyzeImage(imageData: string): Promise<AnalysisResult> {
     
     const result: AnalysisResult = {
       components,
-      annotations
+      annotations,
+      meta: {
+        timestamp: Date.now(),
+        source: 'openai',
+        model: 'gpt-4-vision-preview',
+        version: '1.0'
+      }
     };
     
-    // Cache the result
-    cacheResponse('analyze', imageHash, result);
+    // Cache the result as from API
+    cacheResponse('analyze', imageHash, result, 'api');
+    console.log('Analysis complete and cached');
     
     return result;
   } catch (error) {
@@ -202,41 +227,70 @@ export async function generateFuture(imageData: string): Promise<FutureResult> {
   const cachedResult = getCachedResponse('future', imageHash);
   
   if (cachedResult) {
+    console.log('Using cached future projection result');
     return cachedResult;
   }
   
   try {
-    // For demo purposes, we'll return the same image
-    // In a real implementation, we would call DALL-E to generate a future image
-    const futureImage = imageData;
+    console.log('Generating future projection...');
     
-    // In a real app, we'd generate this data through OpenAI
+    // First, get the analysis to base our future projection on
+    let analysisData: AnalysisResult;
+    
+    // Try to use cached analysis data
+    const cachedAnalysis = getCachedResponse('analyze', imageHash);
+    if (cachedAnalysis) {
+      analysisData = cachedAnalysis;
+      console.log('Using cached analysis data for future projection');
+    } else {
+      // Generate new analysis if we don't have it cached
+      console.log('No cached analysis found, generating new analysis for future projection');
+      analysisData = await analyzeImage(imageData);
+    }
+    
+    // Generate future image using the OpenAI Images API
+    console.log('Generating future image for projection...');
+    const futureImage = await generateFutureImage(imageData);
+    
+    // Generate future analysis based on the components from the analysis
     const futureAnalysis: FutureAnalysis = {
       projectionDate: 'Mai 2030',
       vegetationGrowth: 'Croissance de 30-50% selon les espèces présentes',
-      potentialIssues: [
-        {
-          component: 'Transformateur',
-          risk: 'Élevé',
-          description: 'La végétation pourrait entrer en contact avec le transformateur d\'ici 3 ans si non entretenue.'
-        },
-        {
-          component: 'Ligne électrique',
-          risk: 'Moyen',
-          description: 'Branches au-dessus de la ligne nécessiteront un élagage dans les 1-2 ans.'
-        },
-        {
-          component: 'Poteau',
-          risk: 'Faible',
-          description: 'Peu de risque à court terme, mais surveillance recommandée.'
+      potentialIssues: analysisData.components.map(component => {
+        // Generate issue details based on component type
+        let risk = 'Moyen';
+        let description = 'Risque standard lié à la croissance de la végétation.';
+        
+        // Customize risk based on component type
+        const typeLower = component.type.toLowerCase();
+        if (typeLower.includes('transformateur')) {
+          risk = 'Élevé';
+          description = 'La végétation pourrait entrer en contact avec le transformateur d\'ici 3 ans si non entretenue.';
+        } else if (typeLower.includes('ligne') || typeLower.includes('câble')) {
+          risk = 'Moyen';
+          description = 'Branches au-dessus de la ligne nécessiteront un élagage dans les 1-2 ans.';
+        } else if (typeLower.includes('poteau') || typeLower.includes('pylône')) {
+          risk = 'Faible';
+          description = 'Peu de risque à court terme, mais surveillance recommandée.';
         }
-      ],
+        
+        return {
+          component: component.type,
+          risk,
+          description
+        };
+      }),
       recommendations: [
         'Planifier un élagage préventif dans les 12 prochains mois',
         'Programmer une inspection de suivi dans 18 mois',
         'Établir un plan de gestion de la végétation sur 5 ans',
         'Considérer l\'installation d\'équipement de protection supplémentaire'
-      ]
+      ],
+      meta: {
+        timestamp: Date.now(),
+        source: 'generated',
+        version: '1.0'
+      }
     };
     
     const result: FutureResult = {
@@ -244,8 +298,9 @@ export async function generateFuture(imageData: string): Promise<FutureResult> {
       analysis: futureAnalysis
     };
     
-    // Cache the result
-    cacheResponse('future', imageHash, result);
+    // Cache the result as from API
+    cacheResponse('future', imageHash, result, 'api');
+    console.log('Future projection complete and cached');
     
     return result;
   } catch (error) {
@@ -257,26 +312,100 @@ export async function generateFuture(imageData: string): Promise<FutureResult> {
 // Function to generate a future image using DALL-E
 export async function generateFutureImage(imageData: string): Promise<string> {
   try {
-    // In a real implementation, we would use OpenAI's DALL-E API to generate an image
-    // For the demo, we'll just return the original image
-    return imageData;
+    // Check cache first using a hash of the input image plus a "future" prefix
+    const imageHash = getImageHash(`future_${imageData}`);
+    const cachedResult = getCachedResponse('futureImage', imageHash);
     
-    /* 
-    // This would be the actual implementation with OpenAI
+    if (cachedResult) {
+      console.log('Using cached future image');
+      return cachedResult;
+    }
+    
+    console.log('Generating future image using OpenAI Images API...');
+    
+    // Standard prompt for consistent vegetation growth projection
+    const standardPrompt = `Generate a realistic modified version of this image showing the same electrical infrastructure after 5 years of vegetation growth. 
+    The image should maintain the exact same perspective, infrastructure components, and overall lighting, but show:
+    
+    1. Trees that have grown 30-50% taller with expanded canopies
+    2. Bushes and undergrowth that have become denser and encroached closer to infrastructure
+    3. Vines or climbing plants that may have started growing on poles or structures
+    4. Some branches that now extend closer to or touch power lines
+    5. Overall more dense vegetation that creates potential hazards to the electrical equipment
+    
+    The changes should be subtle yet noticeable and scientifically plausible for 5 years of growth. Maintain photorealism and avoid artistic filters or styles.`;
+    
+    // Use the OpenAI Images API to generate the future image
+    // Since we want to generate a modified version of the current image, we'll use
+    // the createImage API with a detailed prompt that describes the current image
+    // and the vegetation growth we want to see
     const response = await openai.images.generate({
       model: "dall-e-3",
-      prompt: "Generate a future version of this electrical infrastructure image showing 5-year vegetation growth around the components. Show trees and vegetation that have grown considerably and may pose risks to the electrical equipment.",
+      prompt: `${standardPrompt}
+      
+      The image should be a photorealistic modification of an electrical infrastructure scene that shows:
+      - The exact same infrastructure components (poles, lines, transformers) in the same positions
+      - The same perspective and general composition
+      - The same lighting conditions and weather
+      - Only natural vegetation growth changes that would occur over 5 years
+      
+      This is for a utility company's vegetation management planning tool, so accuracy and realism are critical.`,
       n: 1,
       size: "1024x1024",
+      quality: "hd",
     });
     
-    // In a real app, we'd need to convert the URL to base64 or download the image
+    // Check if we have a valid response
+    if (!response.data || response.data.length === 0 || !response.data[0].url) {
+      console.error('Invalid response from OpenAI Images API');
+      return imageData; // Fall back to original image
+    }
+    
+    // Get the generated image URL
     const futureImageUrl = response.data[0].url;
-    // Then fetch the image and convert to base64...
-    return futureImageUrl;
-    */
+    
+    // Convert the URL to base64
+    const futureImageBase64 = await urlToBase64(futureImageUrl);
+    
+    // Cache the result for future use
+    cacheResponse('futureImage', imageHash, futureImageBase64, 'api');
+    
+    console.log('Future image generated and cached');
+    return futureImageBase64;
   } catch (error) {
-    console.error('Error generating future image with DALL-E:', error);
+    console.error('Error generating future image with OpenAI:', error);
+    console.log('Falling back to original image');
+    return imageData; // Fall back to original image
+  }
+}
+
+// Helper function to convert URL to base64
+async function urlToBase64(url: string): Promise<string> {
+  try {
+    // Fetch the image
+    const response = await fetch(url);
+    if (!response.ok) {
+      throw new Error(`Failed to fetch image: ${response.status} ${response.statusText}`);
+    }
+    
+    // Convert to blob
+    const blob = await response.blob();
+    
+    // Convert blob to base64
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        if (typeof reader.result === 'string') {
+          resolve(reader.result);
+        } else {
+          reject(new Error('Failed to convert image to base64'));
+        }
+      };
+      reader.onerror = reject;
+      reader.readAsDataURL(blob);
+    });
+  } catch (error) {
+    console.error('Error converting URL to base64:', error);
     throw error;
   }
 }

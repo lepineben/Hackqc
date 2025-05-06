@@ -1,28 +1,155 @@
-import { getImageHash, cacheResponse } from '../cache';
-import { AnalysisResult, FutureAnalysis } from '../openai';
+import { getImageHash, cacheResponse, prewarmCache, createDemoData, CacheType, getNetworkStatus } from '../cache';
+import { AnalysisResult, FutureAnalysis, generateFutureImage } from '../openai';
 import path from 'path';
+
+// Demo storage keys
+const DEMO_MODE_KEY = 'energia_demo_mode';
+const DEMO_SCENARIO_KEY = 'energia_demo_scenario';
+const DEMO_LOGS_KEY = 'energia_demo_logs';
 
 // Demo image paths - relative to the public directory
 export const DEMO_IMAGES = [
-  '/demo-images/01.jpg',
-  '/demo-images/02.jpg',
-  '/demo-images/03.jpg',
-  '/demo-images/04.jpg',
-  '/demo-images/05.jpg',
+  '/demo-images/01.jpg', // Default/general image
+  '/demo-images/02.jpg', // Powerline-focused image
+  '/demo-images/03.jpg', // Transformer-focused image
+  '/demo-images/04.jpg', // Substation image
+  '/demo-images/05.jpg', // Distribution pole image
 ];
+
+// Demo scenarios mapped to specific images
+export const DEMO_SCENARIOS = {
+  default: { 
+    name: 'General Infrastructure', 
+    imagePath: '/demo-images/01.jpg',
+    futureImagePath: '/demo-images/01_future.jpg', // Will be generated on first run if missing
+    description: 'Standard electrical infrastructure with multiple components'
+  },
+  powerline: { 
+    name: 'Power Line Focus', 
+    imagePath: '/demo-images/02.jpg',
+    futureImagePath: '/demo-images/02_future.jpg', // Will be generated on first run if missing
+    description: 'Demonstration focused on power lines with vegetation risks'
+  },
+  transformer: { 
+    name: 'Transformer Focus', 
+    imagePath: '/demo-images/03.jpg',
+    futureImagePath: '/demo-images/03_future.jpg', // Will be generated on first run if missing
+    description: 'Demonstration focused on transformer equipment'
+  },
+  substation: { 
+    name: 'Substation Focus', 
+    imagePath: '/demo-images/04.jpg',
+    futureImagePath: '/demo-images/04_future.jpg', // Will be generated on first run if missing
+    description: 'Larger electrical substation with multiple components'
+  },
+  distribution: { 
+    name: 'Distribution Pole', 
+    imagePath: '/demo-images/05.jpg',
+    futureImagePath: '/demo-images/05_future.jpg', // Will be generated on first run if missing
+    description: 'Standard distribution pole with high vegetation risk'
+  }
+};
+
+// Demo mode configuration
+export const DEMO_CONFIG = {
+  PRELOAD_IMAGES: true, // Should we preload all images
+  OFFLINE_CAPABLE: true, // Does the demo need to work offline
+  SIMULATE_DELAY: true, // Add realistic processing delay
+  MIN_PROCESSING_DELAY: 1000, // Minimum delay for operations (ms)
+  MAX_PROCESSING_DELAY: 3000, // Maximum delay for operations (ms)
+  PERSIST_SESSION: true, // Remember demo state across page refreshes
+  FORCE_DEMO_FOR_MISSING_KEYS: true, // Use demo mode if API keys are missing
+  VERSION: '1.0', // Demo data version
+  MAX_LOGS: 100, // Maximum number of logs to store
+  KEY_COMBO: { ctrl: true, shift: true, key: 'D' }, // Keyboard shortcut for demo mode
+  TRANSITION_TIMING: {
+    NORMAL: 300, // Standard transition time (ms)
+    FAST: 150,   // Fast transition time (ms)
+    SLOW: 600    // Slow transition time (ms)
+  }
+};
+
+// Get demo status - extended with scenario info
+export function getDemoStatus(): { 
+  enabled: boolean, 
+  reason: string, 
+  mode: string, 
+  scenario: string,
+  manuallyActivated: boolean 
+} {
+  // Check for manual activation first
+  const storedDemo = typeof localStorage !== 'undefined' ? localStorage.getItem(DEMO_MODE_KEY) : null;
+  let manuallyActivated = false;
+  let scenario = 'default';
+  
+  // If demo mode was manually activated
+  if (storedDemo) {
+    try {
+      const demoData = JSON.parse(storedDemo);
+      manuallyActivated = demoData.active === true;
+      scenario = demoData.scenario || 'default';
+    } catch (e) {
+      console.error('Failed to parse stored demo settings:', e);
+    }
+  }
+  
+  const envEnabled = process.env.NEXT_PUBLIC_DEMO_MODE === 'true';
+  const apiKeyMissing = !process.env.OPENAI_API_KEY;
+  const networkOffline = typeof navigator !== 'undefined' ? !navigator.onLine : false;
+  
+  let enabled = envEnabled || manuallyActivated;
+  let reason = manuallyActivated ? 'Manually activated' : 'Configured in environment';
+  let mode = 'standard';
+  
+  if (apiKeyMissing && DEMO_CONFIG.FORCE_DEMO_FOR_MISSING_KEYS) {
+    enabled = true;
+    reason = 'API key missing';
+    mode = 'fallback';
+  }
+  
+  if (networkOffline && DEMO_CONFIG.OFFLINE_CAPABLE) {
+    enabled = true;
+    reason = 'Network offline';
+    mode = 'offline';
+  }
+  
+  return { enabled, reason, mode, scenario, manuallyActivated };
+}
 
 // Convert image URL to base64 (client-side only)
 export async function imageUrlToBase64(url: string): Promise<string> {
   if (typeof window === 'undefined') return '';
   
   try {
-    const response = await fetch(url);
+    // First check if we already have this cached
+    const cachedKey = `demoImageUrl_${url}`;
+    const cachedImage = localStorage.getItem(cachedKey);
+    if (cachedImage) {
+      return cachedImage;
+    }
+    
+    // If not, fetch and convert
+    const response = await fetch(url, {
+      // Use cache: 'force-cache' to ensure we don't repeatedly fetch the same image
+      cache: 'force-cache'
+    });
+    
+    if (!response.ok) {
+      throw new Error(`Failed to fetch image: ${response.status} ${response.statusText}`);
+    }
+    
     const blob = await response.blob();
     
     return new Promise((resolve, reject) => {
       const reader = new FileReader();
       reader.onloadend = () => {
         if (typeof reader.result === 'string') {
+          // Cache the result for future use
+          try {
+            localStorage.setItem(cachedKey, reader.result);
+          } catch (storageError) {
+            console.warn('Failed to cache image in localStorage:', storageError);
+          }
           resolve(reader.result);
         } else {
           reject(new Error('Failed to convert image to base64'));
@@ -35,6 +162,21 @@ export async function imageUrlToBase64(url: string): Promise<string> {
     console.error('Error converting image to base64:', error);
     return '';
   }
+}
+
+// Add a realistic processing delay for demo
+export async function simulateProcessingDelay(operation: string): Promise<void> {
+  if (!DEMO_CONFIG.SIMULATE_DELAY) return;
+  
+  const delayTime = Math.floor(
+    Math.random() * 
+    (DEMO_CONFIG.MAX_PROCESSING_DELAY - DEMO_CONFIG.MIN_PROCESSING_DELAY) + 
+    DEMO_CONFIG.MIN_PROCESSING_DELAY
+  );
+  
+  console.log(`Demo: Simulating ${operation} delay of ${delayTime}ms`);
+  
+  return new Promise(resolve => setTimeout(resolve, delayTime));
 }
 
 // Pre-defined cached analysis data for demo images
@@ -530,67 +672,604 @@ export async function initializeDemoMode(): Promise<void> {
   // This function would typically be called in _app.tsx
   if (typeof window === 'undefined') return;
   
+  // Setup keyboard shortcut for toggling demo mode
+  setupDemoTrigger();
+  
+  // Check if we should be in demo mode
+  const { enabled, reason, mode, scenario } = getDemoStatus();
+  if (!enabled) {
+    console.log('Demo mode not enabled');
+    return;
+  }
+  
+  console.log(`Initializing demo mode: ${mode} (Reason: ${reason}), Scenario: ${scenario}`);
+  
   try {
-    // Convert all demo images to base64 and cache their responses
-    for (let i = 0; i < DEMO_IMAGES.length; i++) {
-      const imagePath = DEMO_IMAGES[i];
-      const imageId = path.basename(imagePath, path.extname(imagePath));
-      
-      // Skip if already processed
-      const localStorageKey = `demoImage_${imageId}`;
-      if (localStorage.getItem(localStorageKey)) {
-        console.log(`Demo image ${imageId} already cached`);
-        continue;
+    // Start by loading a list of processed images to avoid duplicates
+    const processedImages = new Set<string>();
+    try {
+      const storedProcessed = localStorage.getItem('demoProcessedImages');
+      if (storedProcessed) {
+        JSON.parse(storedProcessed).forEach((img: string) => processedImages.add(img));
       }
-      
-      // Convert image to base64
-      const base64Data = await imageUrlToBase64(imagePath);
-      
-      if (base64Data) {
-        // Store image data for quick access
-        localStorage.setItem(localStorageKey, base64Data);
+    } catch (e) {
+      console.warn('Failed to load processed images list:', e);
+    }
+    
+    // If we're offline, use what we have already
+    if (mode === 'offline' && processedImages.size > 0) {
+      console.log(`Using ${processedImages.size} previously cached demo images for offline mode`);
+      return;
+    }
+    
+    // Keep track of the processed images for this session
+    const processedThisSession: string[] = [];
+    
+    // Create a queue of demo images to process
+    const imageQueue = [...DEMO_IMAGES];
+    
+    // Process demo images with a concurrency limit
+    const concurrency = 2;  // Process 2 images at a time
+    const activePromises: Promise<void>[] = [];
+    
+    while (imageQueue.length > 0 || activePromises.length > 0) {
+      // Fill up active promises if possible
+      while (imageQueue.length > 0 && activePromises.length < concurrency) {
+        const imagePath = imageQueue.shift()!;
+        const imageId = path.basename(imagePath, path.extname(imagePath));
         
-        // Hash the image for cache lookup
-        const imageHash = getImageHash(base64Data);
-        
-        // Cache analysis data
-        if (demoAnalysisData[imageId]) {
-          cacheResponse('analyze', imageHash, demoAnalysisData[imageId]);
+        // Skip already processed images
+        if (processedImages.has(imageId)) {
+          console.log(`Demo image ${imageId} already cached`);
+          continue;
         }
         
-        // Cache future data
-        if (demoFutureData[imageId]) {
-          const futureData = {
-            futureImage: base64Data, // In a real app, this would be a modified image
-            analysis: demoFutureData[imageId]
-          };
-          cacheResponse('future', imageHash, futureData);
+        // Process this image
+        const processPromise = processDemo(imagePath, imageId).then(() => {
+          processedImages.add(imageId);
+          processedThisSession.push(imageId);
+        }).catch(err => {
+          console.error(`Error processing demo image ${imageId}:`, err);
+        });
+        
+        activePromises.push(processPromise);
+      }
+      
+      // Wait for at least one promise to complete if any are active
+      if (activePromises.length > 0) {
+        await Promise.race(activePromises);
+        // Remove completed promises
+        for (let i = activePromises.length - 1; i >= 0; i--) {
+          if (activePromises[i].isFulfilled || activePromises[i].isRejected) {
+            activePromises.splice(i, 1);
+          }
         }
       }
     }
     
-    console.log('Demo mode initialized with pre-cached responses');
+    // Save the list of processed images
+    if (processedThisSession.length > 0) {
+      try {
+        localStorage.setItem('demoProcessedImages', 
+          JSON.stringify([...processedImages]));
+        console.log(`Added ${processedThisSession.length} new images to demo cache`);
+      } catch (e) {
+        console.warn('Failed to save processed images list:', e);
+      }
+    }
+    
+    // Initialize demo controller
+    demoController.reset();
+    
+    // Log initialization
+    logDemoEvent('initialization', `Demo mode initialized (${mode}) with ${processedImages.size} cached images`);
+    console.log(`Demo mode initialized with ${processedImages.size} cached images`);
   } catch (error) {
     console.error('Error initializing demo mode:', error);
   }
+}
+
+// Process a single demo image
+async function processDemo(imagePath: string, imageId: string): Promise<void> {
+  console.log(`Processing demo image ${imageId}...`);
+  
+  // Convert image to base64
+  const base64Data = await imageUrlToBase64(imagePath);
+  
+  if (!base64Data) {
+    console.warn(`Failed to convert demo image ${imageId} to base64`);
+    return;
+  }
+  
+  // Store image data for quick access
+  const localStorageKey = `demoImage_${imageId}`;
+  try {
+    localStorage.setItem(localStorageKey, base64Data);
+  } catch (e) {
+    console.warn(`Failed to store demo image ${imageId} in localStorage:`, e);
+  }
+  
+  // Hash the image for cache lookup
+  const imageHash = getImageHash(base64Data);
+  
+  // Check if we need to generate a future image version
+  let futureImageData = base64Data; // Default to original image
+  const futureImageLocalStorageKey = `demoFutureImage_${imageId}`;
+  let needToGenerateFuture = true;
+  
+  // Try to load from localStorage first
+  try {
+    const cachedFutureImage = localStorage.getItem(futureImageLocalStorageKey);
+    if (cachedFutureImage) {
+      console.log(`Found cached future image for ${imageId}`);
+      futureImageData = cachedFutureImage;
+      needToGenerateFuture = false;
+    }
+  } catch (e) {
+    console.warn(`Failed to get cached future image for ${imageId}:`, e);
+  }
+  
+  // If we don't have a cached future image, check if a file exists
+  if (needToGenerateFuture && typeof window !== 'undefined') {
+    const scenarioEntry = Object.values(DEMO_SCENARIOS).find(
+      s => s.imagePath.includes(`/${imageId}.`)
+    );
+    
+    if (scenarioEntry && scenarioEntry.futureImagePath) {
+      try {
+        // Try to load the future image
+        const futureData = await imageUrlToBase64(scenarioEntry.futureImagePath);
+        if (futureData) {
+          console.log(`Loaded future image file for ${imageId}`);
+          futureImageData = futureData;
+          needToGenerateFuture = false;
+          
+          // Store it in localStorage for next time
+          localStorage.setItem(futureImageLocalStorageKey, futureData);
+        }
+      } catch (e) {
+        console.warn(`Failed to load future image file for ${imageId}:`, e);
+      }
+    }
+  }
+  
+  // If we still need to generate a future image, try to generate one
+  if (needToGenerateFuture) {
+    try {
+      console.log(`Generating future image for ${imageId}...`);
+      // Use OpenAI to generate a future image
+      futureImageData = await generateFutureImage(base64Data);
+      
+      // Store the generated image for future use
+      if (futureImageData !== base64Data) { // Only store if it's actually different
+        localStorage.setItem(futureImageLocalStorageKey, futureImageData);
+        console.log(`Generated and stored future image for ${imageId}`);
+      } else {
+        console.log(`Failed to generate future image for ${imageId}, using original`);
+      }
+    } catch (e) {
+      console.error(`Error generating future image for ${imageId}:`, e);
+    }
+  }
+  
+  // Hash the future image
+  const futureImageHash = getImageHash(futureImageData);
+  
+  // Prepare data for both analysis and future projections
+  const demoImages = [];
+  
+  // Cache analysis data
+  if (demoAnalysisData[imageId]) {
+    demoImages.push({
+      url: imagePath,
+      data: base64Data,
+      type: 'analyze' as CacheType,
+      responseData: demoAnalysisData[imageId]
+    });
+  }
+  
+  // Cache future data
+  if (demoFutureData[imageId]) {
+    const futureData = {
+      futureImage: futureImageData, // Use the generated or cached future image
+      analysis: demoFutureData[imageId]
+    };
+    
+    demoImages.push({
+      url: imagePath,
+      data: base64Data,
+      type: 'future' as CacheType,
+      responseData: futureData
+    });
+    
+    // Also cache the future image by itself
+    demoImages.push({
+      url: imagePath,
+      data: base64Data,
+      type: 'futureImage' as CacheType,
+      responseData: futureImageData
+    });
+  }
+  
+  // Use the prewarmCache function to store everything in cache
+  await prewarmCache(demoImages);
+  
+  console.log(`Demo image ${imageId} processed and cached with future projection`);
 }
 
 // Get a random demo image
 export function getRandomDemoImage(): string {
   if (typeof window === 'undefined') return DEMO_IMAGES[0];
   
-  const imageIndex = Math.floor(Math.random() * DEMO_IMAGES.length);
-  const imagePath = DEMO_IMAGES[imageIndex];
-  const imageId = path.basename(imagePath, path.extname(imagePath));
-  
-  // Check if we have it in localStorage
-  const localStorageKey = `demoImage_${imageId}`;
-  const cachedImage = localStorage.getItem(localStorageKey);
-  
-  if (cachedImage) {
-    return cachedImage;
+  try {
+    // Get all cached demo images
+    const demoImageKeys = Object.keys(localStorage)
+      .filter(key => key.startsWith('demoImage_'));
+    
+    if (demoImageKeys.length === 0) {
+      // No cached images, return a path
+      const randomIndex = Math.floor(Math.random() * DEMO_IMAGES.length);
+      return DEMO_IMAGES[randomIndex];
+    }
+    
+    // Get a random cached image
+    const randomKey = demoImageKeys[Math.floor(Math.random() * demoImageKeys.length)];
+    const cachedImage = localStorage.getItem(randomKey);
+    
+    if (cachedImage) {
+      return cachedImage;
+    }
+    
+    // Fallback to a path
+    const randomIndex = Math.floor(Math.random() * DEMO_IMAGES.length);
+    return DEMO_IMAGES[randomIndex];
+  } catch (error) {
+    console.error('Error getting random demo image:', error);
+    
+    // Fallback to first image
+    return DEMO_IMAGES[0];
+  }
+}
+
+// Get a specific demo image by ID
+export function getDemoImageById(imageId: string): string {
+  if (typeof window === 'undefined') {
+    // Find the path that matches the ID
+    const matchingPath = DEMO_IMAGES.find(path => 
+      path.includes(`/${imageId}.`));
+    return matchingPath || DEMO_IMAGES[0];
   }
   
-  // Return the path if we don't have the base64 yet
-  return imagePath;
+  try {
+    // Check if we have it in localStorage
+    const localStorageKey = `demoImage_${imageId}`;
+    const cachedImage = localStorage.getItem(localStorageKey);
+    
+    if (cachedImage) {
+      return cachedImage;
+    }
+    
+    // Find the path that matches the ID
+    const matchingPath = DEMO_IMAGES.find(path => 
+      path.includes(`/${imageId}.`));
+    return matchingPath || DEMO_IMAGES[0];
+  } catch (error) {
+    console.error(`Error getting demo image ${imageId}:`, error);
+    return DEMO_IMAGES[0];
+  }
 }
+
+// Get future image version of a demo image
+export function getFutureDemoImageById(imageId: string): string {
+  if (typeof window === 'undefined') {
+    // Find the scenario that matches the ID
+    const scenario = Object.values(DEMO_SCENARIOS).find(s => 
+      s.imagePath.includes(`/${imageId}.`));
+    
+    return scenario?.futureImagePath || DEMO_IMAGES[0];
+  }
+  
+  try {
+    // Check if we have a cached future image
+    const futureImageKey = `demoFutureImage_${imageId}`;
+    const cachedFutureImage = localStorage.getItem(futureImageKey);
+    
+    if (cachedFutureImage) {
+      return cachedFutureImage;
+    }
+    
+    // If not, look for the scenario future image path
+    const scenario = Object.values(DEMO_SCENARIOS).find(s => 
+      s.imagePath.includes(`/${imageId}.`));
+    
+    if (scenario?.futureImagePath) {
+      return scenario.futureImagePath;
+    }
+    
+    // Fallback to original image
+    return getDemoImageById(imageId);
+  } catch (error) {
+    console.error(`Error getting future demo image ${imageId}:`, error);
+    return getDemoImageById(imageId);
+  }
+}
+
+// Demo mode activation and deactivation functions
+export function activateDemoMode(scenario: string = 'default'): void {
+  if (typeof window === 'undefined') return;
+  
+  // Validate scenario
+  if (!DEMO_SCENARIOS[scenario]) {
+    console.warn(`Unknown scenario: ${scenario}, defaulting to 'default'`);
+    scenario = 'default';
+  }
+  
+  // Store in localStorage
+  localStorage.setItem(DEMO_MODE_KEY, JSON.stringify({ 
+    active: true, 
+    scenario,
+    activatedAt: Date.now() 
+  }));
+  
+  // Log activation
+  logDemoEvent('activation', `Demo mode activated with scenario: ${scenario}`);
+  
+  console.log(`Demo mode activated with scenario: ${scenario}`);
+}
+
+export function deactivateDemoMode(): void {
+  if (typeof window === 'undefined') return;
+  
+  // Remove from localStorage
+  localStorage.removeItem(DEMO_MODE_KEY);
+  
+  // Log deactivation
+  logDemoEvent('deactivation', 'Demo mode deactivated');
+  
+  console.log('Demo mode deactivated');
+}
+
+export function changeScenario(newScenario: string): void {
+  if (typeof window === 'undefined') return;
+  
+  // Validate scenario
+  if (!DEMO_SCENARIOS[newScenario]) {
+    console.warn(`Unknown scenario: ${newScenario}, cannot change`);
+    return;
+  }
+  
+  // Get current status
+  const { enabled, scenario: currentScenario } = getDemoStatus();
+  
+  if (!enabled) {
+    console.warn('Cannot change scenario - demo mode is not active');
+    return;
+  }
+  
+  if (currentScenario === newScenario) {
+    console.log(`Already using scenario: ${newScenario}`);
+    return;
+  }
+  
+  // Update localStorage
+  localStorage.setItem(DEMO_MODE_KEY, JSON.stringify({ 
+    active: true, 
+    scenario: newScenario,
+    activatedAt: Date.now() 
+  }));
+  
+  // Log scenario change
+  logDemoEvent('scenario_change', `Changed scenario from ${currentScenario} to ${newScenario}`);
+  
+  console.log(`Demo scenario changed from ${currentScenario} to ${newScenario}`);
+}
+
+// Setup keyboard shortcut for toggling demo mode
+export function setupDemoTrigger(): void {
+  if (typeof window === 'undefined') return;
+  
+  document.addEventListener('keydown', (event) => {
+    const { ctrl, shift, key } = DEMO_CONFIG.KEY_COMBO;
+    
+    // Check if the key combo matches
+    if (
+      (ctrl === true && event.ctrlKey) &&
+      (shift === true && event.shiftKey) &&
+      event.key.toUpperCase() === key.toUpperCase()
+    ) {
+      // Get current demo status
+      const { enabled, scenario } = getDemoStatus();
+      
+      if (enabled) {
+        // If already enabled, deactivate
+        deactivateDemoMode();
+      } else {
+        // If not enabled, activate with default scenario
+        activateDemoMode();
+      }
+      
+      // Prevent default browser behavior for this key combo
+      event.preventDefault();
+    }
+  });
+  
+  logDemoEvent('setup', 'Demo trigger keyboard shortcut set up');
+  console.log(`Demo trigger set up with keyboard shortcut: ${DEMO_CONFIG.KEY_COMBO.ctrl ? 'Ctrl+' : ''}${DEMO_CONFIG.KEY_COMBO.shift ? 'Shift+' : ''}${DEMO_CONFIG.KEY_COMBO.key}`);
+}
+
+// Demo event logging
+export function logDemoEvent(type: string, message: string): void {
+  if (typeof window === 'undefined') return;
+  
+  try {
+    // Get existing logs
+    let logs = [];
+    try {
+      const storedLogs = localStorage.getItem(DEMO_LOGS_KEY);
+      if (storedLogs) {
+        logs = JSON.parse(storedLogs);
+      }
+    } catch (e) {
+      console.error('Failed to parse stored demo logs:', e);
+    }
+    
+    // Add new log entry
+    logs.push({
+      timestamp: Date.now(),
+      type,
+      message
+    });
+    
+    // Limit log size
+    if (logs.length > DEMO_CONFIG.MAX_LOGS) {
+      logs = logs.slice(-DEMO_CONFIG.MAX_LOGS);
+    }
+    
+    // Store updated logs
+    localStorage.setItem(DEMO_LOGS_KEY, JSON.stringify(logs));
+  } catch (error) {
+    console.error('Failed to log demo event:', error);
+  }
+}
+
+// Get demo logs
+export function getDemoLogs(): Array<{ timestamp: number, type: string, message: string }> {
+  if (typeof window === 'undefined') return [];
+  
+  try {
+    const storedLogs = localStorage.getItem(DEMO_LOGS_KEY);
+    if (storedLogs) {
+      return JSON.parse(storedLogs);
+    }
+  } catch (e) {
+    console.error('Failed to retrieve demo logs:', e);
+  }
+  
+  return [];
+}
+
+// Clear demo logs
+export function clearDemoLogs(): void {
+  if (typeof window === 'undefined') return;
+  
+  try {
+    localStorage.removeItem(DEMO_LOGS_KEY);
+    console.log('Demo logs cleared');
+  } catch (e) {
+    console.error('Failed to clear demo logs:', e);
+  }
+}
+
+// Demo controller - manages the flow of the demo
+export const demoController = {
+  // Current step in the demo flow
+  currentStep: 0,
+  
+  // Maximum step count (for progress tracking)
+  maxSteps: 3,
+  
+  // Delay between steps
+  stepDelay: DEMO_CONFIG.TRANSITION_TIMING.NORMAL,
+  
+  // Get current scenario data
+  getScenarioData(): { 
+    name: string, 
+    imagePath: string, 
+    futureImagePath: string, 
+    description: string 
+  } {
+    const { scenario } = getDemoStatus();
+    return DEMO_SCENARIOS[scenario] || DEMO_SCENARIOS.default;
+  },
+  
+  // Get scenario image
+  getScenarioImage(): string {
+    const { scenario } = getDemoStatus();
+    const scenarioData = DEMO_SCENARIOS[scenario] || DEMO_SCENARIOS.default;
+    return scenarioData.imagePath;
+  },
+  
+  // Get future scenario image
+  getFutureScenarioImage(): string {
+    const { scenario } = getDemoStatus();
+    const scenarioData = DEMO_SCENARIOS[scenario] || DEMO_SCENARIOS.default;
+    
+    // Get image ID from the path
+    const imagePath = scenarioData.imagePath;
+    const imageId = path.basename(imagePath, path.extname(imagePath));
+    
+    // Get the future image for this ID
+    return getFutureDemoImageById(imageId);
+  },
+  
+  // Get both current and future images for comparison
+  getComparisonImages(): { current: string, future: string } {
+    const { scenario } = getDemoStatus();
+    const scenarioData = DEMO_SCENARIOS[scenario] || DEMO_SCENARIOS.default;
+    
+    // Get image ID from the path
+    const imagePath = scenarioData.imagePath;
+    const imageId = path.basename(imagePath, path.extname(imagePath));
+    
+    return {
+      current: getDemoImageById(imageId),
+      future: getFutureDemoImageById(imageId)
+    };
+  },
+  
+  // Reset demo to initial state
+  reset(): void {
+    this.currentStep = 0;
+    logDemoEvent('flow', 'Demo flow reset to initial state');
+  },
+  
+  // Advance to next step
+  nextStep(): number {
+    if (this.currentStep < this.maxSteps) {
+      this.currentStep++;
+      logDemoEvent('flow', `Advanced to demo step ${this.currentStep}`);
+    }
+    return this.currentStep;
+  },
+  
+  // Go back to previous step
+  prevStep(): number {
+    if (this.currentStep > 0) {
+      this.currentStep--;
+      logDemoEvent('flow', `Moved back to demo step ${this.currentStep}`);
+    }
+    return this.currentStep;
+  },
+  
+  // Jump to specific step
+  goToStep(step: number): number {
+    if (step >= 0 && step <= this.maxSteps) {
+      this.currentStep = step;
+      logDemoEvent('flow', `Jumped to demo step ${this.currentStep}`);
+    }
+    return this.currentStep;
+  },
+  
+  // Get step name based on current step
+  getStepName(): string {
+    const stepNames = [
+      'Capture Image',
+      'Analyze Components',
+      'View Future Projection',
+      'Review Recommendations'
+    ];
+    
+    return stepNames[this.currentStep] || 'Unknown Step';
+  },
+  
+  // Set custom timing for animations
+  setTiming(timing: 'NORMAL' | 'FAST' | 'SLOW'): void {
+    this.stepDelay = DEMO_CONFIG.TRANSITION_TIMING[timing];
+    logDemoEvent('timing', `Animation timing set to ${timing} (${this.stepDelay}ms)`);
+  },
+  
+  // Toggle timing between fast and normal
+  toggleFastMode(fast: boolean): void {
+    this.setTiming(fast ? 'FAST' : 'NORMAL');
+  }
+};
