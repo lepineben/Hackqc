@@ -1,24 +1,51 @@
 import { useState, useEffect } from 'react'
 
-const ProcessingAnimation = () => {
+type ProcessingAnimationProps = {
+  step?: number;
+  totalSteps?: number;
+  customSteps?: string[];
+  autoProgress?: boolean;
+}
+
+const ProcessingAnimation: React.FC<ProcessingAnimationProps> = ({
+  step = 0,
+  totalSteps = 5,
+  customSteps,
+  autoProgress = true
+}) => {
   const [progress, setProgress] = useState(0)
-  const [currentStep, setCurrentStep] = useState(0)
-  const steps = [
+  const [currentStep, setCurrentStep] = useState(step)
+  
+  const defaultSteps = [
     'Analyzing electrical components...',
     'Detecting vegetation features...',
     'Assessing infrastructure conditions...',
     'Calculating vegetation density...',
     'Preparing detailed analysis...'
   ]
+  
+  const steps = customSteps || defaultSteps
 
+  // Update progress when step changes externally
   useEffect(() => {
+    if (!autoProgress) {
+      setCurrentStep(step)
+      // Calculate progress based on current step
+      const progressValue = (step / (totalSteps - 1)) * 100
+      setProgress(progressValue)
+    }
+  }, [step, totalSteps, autoProgress])
+  
+  useEffect(() => {
+    if (!autoProgress) return
+    
     // Simulate a 3-second processing time with steps
     const totalDuration = 3000 // 3 seconds total
     const incrementInterval = 50 // Update progress every 50ms
     const totalIncrements = totalDuration / incrementInterval
     const progressPerIncrement = 100 / totalIncrements
     
-    // Each step takes 20% of the total duration
+    // Each step takes equal percentage of the total duration
     const stepsCount = steps.length
     const progressPerStep = 100 / stepsCount
     
@@ -39,7 +66,7 @@ const ProcessingAnimation = () => {
     }, incrementInterval)
 
     return () => clearInterval(interval)
-  }, [steps.length])
+  }, [steps.length, autoProgress])
 
   return (
     <div className="w-full max-w-md mx-auto text-center">
