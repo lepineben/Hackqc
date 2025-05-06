@@ -2,15 +2,25 @@ import { useState, useEffect } from 'react'
 import { useRouter } from 'next/router'
 import Head from 'next/head'
 import axios from 'axios'
+import dynamic from 'next/dynamic'
 import Layout from '../../components/Layout'
-import ComparisonView from '../../components/ComparisonView'
-import FutureInfoPanel from '../../components/FutureInfoPanel'
 import ProcessingAnimation from '../../components/ProcessingAnimation'
 import { FutureResult } from '../../lib/openai'
 
+// Import components with client-side only rendering
+const ComparisonView = dynamic(
+  () => import('../../components/ComparisonView'),
+  { ssr: false }
+);
+
+const FutureInfoPanel = dynamic(
+  () => import('../../components/FutureInfoPanel'),
+  { ssr: false }
+);
+
 export default function Future() {
   const router = useRouter()
-  const { imageId } = router.query
+  const { imageId, imageKey } = router.query
   
   const [currentImage, setCurrentImage] = useState<string | null>(null)
   const [futureImage, setFutureImage] = useState<string | null>(null)
@@ -20,47 +30,85 @@ export default function Future() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [processingStep, setProcessingStep] = useState(0)
+  const [isMounted, setIsMounted] = useState(false)
+  
+  // Set mounted state on client-side
+  useEffect(() => {
+    setIsMounted(true);
+  }, []);
+
+  // Helper function to normalize base64 image data
+  const normalizeBase64 = (base64Data: string) => {
+    // Ensure base64 data has the correct prefix
+    if (!base64Data.startsWith('data:image')) {
+      return `data:image/jpeg;base64,${base64Data.replace(/^data:image\/\w+;base64,/, '')}`;
+    }
+    return base64Data;
+  };
   
   useEffect(() => {
-    if (!imageId) return
+    // Don't proceed until we're mounted on client-side
+    if (!isMounted) return;
     
-    // Set the current image from the URL parameter
-    const image = decodeURIComponent(imageId as string)
-    setCurrentImage(image)
-    
-    // Call the generate-future API
-    const generateFuture = async () => {
+    // Get image data from either imageKey or imageId
+    const getImageAndGenerateFuture = async () => {
       try {
-        setProcessingStep(1)
+        let imageData: string | null = null;
+        
+        // First check for imageKey (new method)
+        if (imageKey && typeof imageKey === 'string') {
+          // Get image from sessionStorage
+          imageData = sessionStorage.getItem(decodeURIComponent(imageKey));
+          if (!imageData) {
+            throw new Error('Image not found in session storage');
+          }
+        } 
+        // Then check for direct imageId (old method, for backward compatibility)
+        else if (imageId && typeof imageId === 'string') {
+          imageData = decodeURIComponent(imageId);
+        }
+        
+        if (!imageData) {
+          throw new Error('No image data available');
+        }
+        
+        // Make sure the image is normalized
+        const normalizedImage = normalizeBase64(imageData);
+        setCurrentImage(normalizedImage);
+        
+        // Call the generate-future API
+        setProcessingStep(1);
         
         // Simulate processing steps for better UX
-        const timer1 = setTimeout(() => setProcessingStep(2), 1000)
-        const timer2 = setTimeout(() => setProcessingStep(3), 2000)
+        const timer1 = setTimeout(() => setProcessingStep(2), 1000);
+        const timer2 = setTimeout(() => setProcessingStep(3), 2000);
         
-        const response = await axios.post('/api/generate-future', { image })
+        const response = await axios.post('/api/generate-future', { 
+          image: normalizedImage 
+        });
         
         // Clear the timers if the response comes back quickly
-        clearTimeout(timer1)
-        clearTimeout(timer2)
+        clearTimeout(timer1);
+        clearTimeout(timer2);
         
-        setProcessingStep(4)
+        setProcessingStep(4);
         
-        setFutureImage(response.data.futureImage)
-        setFutureData(response.data.analysis)
+        setFutureImage(response.data.futureImage);
+        setFutureData(response.data.analysis);
         
         setTimeout(() => {
-          setLoading(false)
-          setActiveView('future') // Automatically switch to future view when loaded
-        }, 500)
+          setLoading(false);
+          setActiveView('future'); // Automatically switch to future view when loaded
+        }, 500);
       } catch (err) {
-        console.error('Error generating future projection:', err)
-        setError('Échec de la génération de la projection future. Veuillez réessayer.')
-        setLoading(false)
+        console.error('Error generating future projection:', err);
+        setError('Échec de la génération de la projection future. Veuillez réessayer.');
+        setLoading(false);
       }
-    }
+    };
     
-    generateFuture()
-  }, [imageId])
+    getImageAndGenerateFuture();
+  }, [imageId, imageKey, isMounted])
   
   const toggleView = () => {
     setActiveView(activeView === 'current' ? 'future' : 'current')
@@ -90,8 +138,17 @@ export default function Future() {
   }
   
   const goToAnalysis = () => {
-    if (imageId) {
-      router.push(`/analysis?imageId=${encodeURIComponent(imageId as string)}`)
+    // Prefer using imageKey if available
+    if (imageKey && typeof imageKey === 'string') {
+      router.push(`/analysis?imageKey=${encodeURIComponent(imageKey)}`);
+    } 
+    // For backward compatibility
+    else if (imageId && typeof imageId === 'string') {
+      router.push(`/analysis?imageId=${encodeURIComponent(imageId)}`);
+    }
+    // If no image identifiers, just go to analysis (should never happen)
+    else {
+      router.push('/analysis');
     }
   }
   
@@ -127,7 +184,15 @@ export default function Future() {
         
         <h1 className="text-2xl font-bold mb-6">Projection de croissance végétative</h1>
         
-        {loading ? (
+        {!isMounted ? (
+          // Simple loading placeholder while client-side code initializes
+          <div className="flex items-center justify-center min-h-[60vh]">
+            <div className="text-center p-8">
+              <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-primary-500 mx-auto mb-4"></div>
+              <p className="text-secondary-600">Chargement de l'interface...</p>
+            </div>
+          </div>
+        ) : loading ? (
           <div className="flex flex-col items-center justify-center py-10">
             <ProcessingAnimation step={processingStep} totalSteps={4} />
             <p className="mt-4 text-lg font-medium">{getProcessingMessage(processingStep)}</p>
