@@ -1,5 +1,8 @@
 import { useState, useEffect } from 'react'
-import Image from 'next/image'
+import dynamic from 'next/dynamic'
+
+// Import Image component with client-side only rendering
+const Image = dynamic(() => import('next/image'), { ssr: false })
 
 type ComparisonViewProps = {
   currentImage: string

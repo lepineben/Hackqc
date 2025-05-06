@@ -1,10 +1,17 @@
 import { useState, useEffect } from 'react'
 
+type LocationData = {
+  name: string;
+  coordinates: {
+    lat: number;
+    lng: number;
+  };
+  status: string;
+  vegetation: number;
+}
+
 type InfoPanelProps = {
-  location: {
-    lat: number
-    lng: number
-  }
+  location: LocationData;
 }
 
 interface ZoneInfo {
@@ -30,14 +37,15 @@ const getColorByStatus = (status: string) => {
 const InfoPanel = ({ location }: InfoPanelProps) => {
   const [isVisible, setIsVisible] = useState(false);
   const [zoneInfo, setZoneInfo] = useState<ZoneInfo>({
-    name: "Montréal - Centre-Ville",
+    name: location.name || "Montréal - Centre-Ville",
     type: "Urbaine",
-    vegetation: "Moyenne",
-    risk: "Moyen",
+    vegetation: location.vegetation > 60 ? "Élevée" : location.vegetation > 30 ? "Moyenne" : "Faible",
+    risk: location.vegetation > 60 ? "Élevé" : location.vegetation > 30 ? "Moyen" : "Faible",
     lastInspection: "15 jan. 2024",
     nextInspection: "15 jan. 2025",
     infrastructureCount: 8,
-    maintenanceStatus: "good"
+    maintenanceStatus: location.status === "critical" ? "critical" : 
+                       location.status === "warning" ? "warning" : "good"
   });
   
   // Simulate data loading when location changes
@@ -71,7 +79,7 @@ const InfoPanel = ({ location }: InfoPanelProps) => {
         
         <div className="bg-gray-50 p-3 rounded-md border border-gray-100">
           <p className="text-sm font-medium text-gray-600">Coordonnées</p>
-          <p className="font-mono text-sm">{location.lat.toFixed(5)}, {location.lng.toFixed(5)}</p>
+          <p className="font-mono text-sm">{location.coordinates.lat.toFixed(5)}, {location.coordinates.lng.toFixed(5)}</p>
           <p className="text-xs text-gray-500 mt-1">Région: Québec, Canada</p>
         </div>
         

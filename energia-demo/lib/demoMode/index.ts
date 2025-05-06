@@ -1,11 +1,13 @@
-import { getImageHash, cacheResponse, prewarmCache, createDemoData, CacheType, getNetworkStatus } from '../cache';
-import { AnalysisResult, FutureAnalysis, generateFutureImage } from '../openai';
 import path from 'path';
+import { getImageHash, cacheResponse, prewarmCache, createDemoData, CacheType, getNetworkStatus } from '../cache';
 
-// Demo storage keys
-const DEMO_MODE_KEY = 'energia_demo_mode';
-const DEMO_SCENARIO_KEY = 'energia_demo_scenario';
-const DEMO_LOGS_KEY = 'energia_demo_logs';
+// Demo storage keys - must be declared before importing anything that references them
+export const DEMO_MODE_KEY = 'energia_demo_mode';
+export const DEMO_SCENARIO_KEY = 'energia_demo_scenario';
+export const DEMO_LOGS_KEY = 'energia_demo_logs';
+
+// Import after defining constants to avoid circular dependencies
+import { AnalysisResult, FutureAnalysis, generateFutureImage } from '../openai';
 
 // Demo image paths - relative to the public directory
 export const DEMO_IMAGES = [
@@ -77,8 +79,19 @@ export function getDemoStatus(): {
   scenario: string,
   manuallyActivated: boolean 
 } {
-  // Check for manual activation first
-  const storedDemo = typeof localStorage !== 'undefined' ? localStorage.getItem(DEMO_MODE_KEY) : null;
+  // Server-side fallback values
+  if (typeof window === 'undefined') {
+    return {
+      enabled: process.env.NEXT_PUBLIC_DEMO_MODE === 'true', 
+      reason: 'Server-side default', 
+      mode: 'standard', 
+      scenario: 'default',
+      manuallyActivated: false
+    };
+  }
+  
+  // Check for manual activation first (client-side only)
+  const storedDemo = localStorage.getItem(DEMO_MODE_KEY);
   let manuallyActivated = false;
   let scenario = 'default';
   
@@ -94,8 +107,8 @@ export function getDemoStatus(): {
   }
   
   const envEnabled = process.env.NEXT_PUBLIC_DEMO_MODE === 'true';
-  const apiKeyMissing = !process.env.OPENAI_API_KEY;
-  const networkOffline = typeof navigator !== 'undefined' ? !navigator.onLine : false;
+  const apiKeyMissing = !process.env.OPENAI_API_KEY || process.env.OPENAI_API_KEY === 'dummy-key';
+  const networkOffline = !navigator.onLine;
   
   let enabled = envEnabled || manuallyActivated;
   let reason = manuallyActivated ? 'Manually activated' : 'Configured in environment';

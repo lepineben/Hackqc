@@ -562,6 +562,11 @@ export function getFallbackAnalysisData(): any {
   // Generate a unique fallback ID for the session
   const fallbackId = getFallbackId();
   
+  // Define basic dimensions for annotation calculations 
+  // (prevents "intersects" error from undefined values)
+  const imgWidth = 600;
+  const imgHeight = 800;
+  
   const fallbackData = {
     components: [
       {
@@ -591,10 +596,10 @@ export function getFallbackAnalysisData(): any {
         id: '1',
         type: 'rectangle',
         geometry: {
-          x: 20,
-          y: 30,
-          width: 100,
-          height: 150
+          x: 0.1 * imgWidth,
+          y: 0.2 * imgHeight,
+          width: 0.2 * imgWidth,
+          height: 0.3 * imgHeight
         },
         data: {
           label: 'Transformateur',
@@ -605,10 +610,10 @@ export function getFallbackAnalysisData(): any {
         id: '2',
         type: 'rectangle',
         geometry: {
-          x: 200,
-          y: 50,
-          width: 350,
-          height: 5
+          x: 0.3 * imgWidth,
+          y: 0.1 * imgHeight,
+          width: 0.5 * imgWidth,
+          height: 0.05 * imgHeight
         },
         data: {
           label: 'Ligne électrique',
@@ -619,10 +624,10 @@ export function getFallbackAnalysisData(): any {
         id: '3',
         type: 'rectangle',
         geometry: {
-          x: 180,
-          y: 60,
-          width: 30,
-          height: 300
+          x: 0.4 * imgWidth,
+          y: 0.2 * imgHeight,
+          width: 0.08 * imgWidth,
+          height: 0.6 * imgHeight
         },
         data: {
           label: 'Poteau',

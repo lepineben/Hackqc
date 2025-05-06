@@ -1,4 +1,4 @@
-import { ReactNode } from 'react'
+import { ReactNode, useState, useEffect } from 'react'
 import Head from 'next/head'
 import { useRouter } from 'next/router'
 import dynamic from 'next/dynamic'
@@ -17,6 +17,12 @@ type LayoutProps = {
 
 const Layout = ({ children, title = 'ÉnergIA' }: LayoutProps) => {
   const router = useRouter()
+  const [isMounted, setIsMounted] = useState(false)
+  
+  // Set mounted state after component mounts
+  useEffect(() => {
+    setIsMounted(true)
+  }, [])
   
   // Page transition variants
   const pageVariants = {
@@ -114,8 +120,8 @@ const Layout = ({ children, title = 'ÉnergIA' }: LayoutProps) => {
         </AnimatePresence>
       </main>
       
-      {/* Demo mode indicator */}
-      <DemoModeIndicator position="bottom-right" />
+      {/* Demo mode indicator - only render on client */}
+      {isMounted && <DemoModeIndicator position="bottom-right" />}
       
       <footer className="bg-secondary-800 text-white py-4 px-4 shadow-inner">
         <div className="max-w-6xl mx-auto">

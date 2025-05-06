@@ -2,9 +2,15 @@ import { OpenAI } from 'openai';
 import { getImageHash, getCachedResponse, cacheResponse } from '../cache';
 
 // Initialize OpenAI client
-export const openai = new OpenAI({
+let openaiInstance: OpenAI;
+
+// Initialize with environment variable API key
+openaiInstance = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY,
+  dangerouslyAllowBrowser: true
 });
+
+export const openai = openaiInstance;
 
 // Types for OpenAI API responses
 export type OpenAIComponent = {
