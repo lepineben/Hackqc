@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
 import type { NextPage } from 'next'
+import { motion } from 'framer-motion'
 import Layout from '../components/Layout'
 import Map from '../components/Map'
 import InfoPanel from '../components/InfoPanel'
@@ -19,40 +20,88 @@ const Home: NextPage = () => {
     return () => clearTimeout(timer)
   }, [])
   
+  // Staggered animations for children
+  const containerVariants = {
+    hidden: { opacity: 0 },
+    visible: {
+      opacity: 1,
+      transition: {
+        staggerChildren: 0.15,
+        delayChildren: 0.1
+      }
+    }
+  }
+  
+  const itemVariants = {
+    hidden: { opacity: 0, y: 20 },
+    visible: {
+      opacity: 1,
+      y: 0,
+      transition: {
+        duration: 0.5,
+        ease: [0.25, 0.1, 0.25, 1.0]
+      }
+    }
+  }
+  
   return (
     <Layout title="ÉnergIA - Accueil">
       <Head>
         <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
       </Head>
       
-      <div className={`transition-opacity duration-500 ${isLoaded ? 'opacity-100' : 'opacity-0'}`}>
+      <motion.div 
+        variants={containerVariants}
+        initial="hidden"
+        animate={isLoaded ? "visible" : "hidden"}
+        className="w-full"
+      >
         <div className="max-w-5xl mx-auto">
-          <div className="mb-6">
-            <h1 className="text-2xl md:text-3xl font-bold text-gray-800 mb-2">Bienvenue sur ÉnergIA</h1>
-            <p className="text-gray-600">
+          <motion.div variants={itemVariants} className="mb-6">
+            <h1 className="text-2xl md:text-3xl font-bold text-secondary-800 mb-2 font-display">
+              Bienvenue sur ÉnergIA
+            </h1>
+            <p className="text-secondary-600">
               Analysez l'infrastructure électrique et visualisez l'impact futur de la végétation
             </p>
-          </div>
+          </motion.div>
           
-          <div className="bg-white rounded-xl shadow-sm p-4 md:p-6 mb-6">
+          <motion.div 
+            variants={itemVariants} 
+            className="card p-4 md:p-6 mb-6"
+          >
             <div className="relative">
               <Map location={location} />
             </div>
             
-            <div className="mt-6">
+            <motion.div 
+              variants={itemVariants} 
+              className="mt-6"
+            >
               <InfoPanel location={location} />
-            </div>
-          </div>
+            </motion.div>
+          </motion.div>
           
           <div className="fixed bottom-0 left-0 right-0 z-10 pb-4 pointer-events-none">
             <div className="max-w-5xl mx-auto px-4">
-              <div className="pointer-events-auto">
+              <motion.div 
+                className="pointer-events-auto"
+                initial={{ opacity: 0, y: 50 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ 
+                  delay: 0.4, 
+                  duration: 0.5,
+                  type: "spring",
+                  stiffness: 400,
+                  damping: 25
+                }}
+              >
                 <CaptureButton />
-              </div>
+              </motion.div>
             </div>
           </div>
         </div>
-      </div>
+      </motion.div>
     </Layout>
   )
 }
