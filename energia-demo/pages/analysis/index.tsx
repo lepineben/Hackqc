@@ -255,9 +255,6 @@ export default function Analysis() {
         
         <h1 className="text-2xl font-bold text-gray-800 mb-6">
           Analyse d'infrastructure
-          {process.env.NEXT_PUBLIC_DEMO_MODE === 'true' && (
-            <span className="ml-2 text-xs text-gray-500">Mode démo activé</span>
-          )}
         </h1>
         
         {isMounted ? (
@@ -265,17 +262,15 @@ export default function Analysis() {
             {/* Image with annotations */}
             <div className="flex-1 bg-white rounded-lg shadow-md overflow-hidden">
               {displayedImage && analysisData ? (
-                <div className="relative h-full min-h-[400px]">
+                <div className="relative min-h-[400px] flex items-center justify-center">
                   {/* TEMPORARY DEMO FIX: Always show boxes image directly */}
-                  <div className="relative w-full h-full">
-                    <img
-                      src="/demo-images/02_boxes.jpg"
-                      alt="Analyse d'infrastructure"
-                      className="max-w-full max-h-full object-contain mx-auto"
-                      onLoad={() => console.log("Demo boxes image loaded successfully!")}
-                      onError={(e) => console.error("Error loading demo boxes image", e)}
-                    />
-                  </div>}
+                  <img
+                    src="/demo-images/02_boxes.jpg"
+                    alt="Analyse d'infrastructure"
+                    className="max-w-full max-h-[70vh] object-contain"
+                    onLoad={() => console.log("Demo boxes image loaded successfully!")}
+                    onError={(e) => console.error("Error loading demo boxes image", e)}
+                  />
                 </div>
               ) : (
                 <div className="flex items-center justify-center h-64 bg-gray-100 text-gray-400">

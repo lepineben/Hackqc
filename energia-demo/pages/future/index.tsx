@@ -388,7 +388,7 @@ export default function Future() {
                   <img
                     src={futureImage}
                     alt="Projection future"
-                    className="max-w-full object-contain mx-auto"
+                    className="max-w-full max-h-[70vh] object-contain mx-auto"
                   />
                 </div>
               )}
