@@ -41,7 +41,7 @@ const ImagePreview = ({ image, onConfirm, onRetake }: ImagePreviewProps) => {
     return (
       <div className="w-full max-w-2xl mx-auto text-center">
         <div className="animate-pulse bg-gray-200 rounded-lg h-72 md:h-96 flex items-center justify-center">
-          <p className="text-gray-500">Loading image...</p>
+          <p className="text-gray-500">Chargement de l'image...</p>
         </div>
       </div>
     )
@@ -51,13 +51,13 @@ const ImagePreview = ({ image, onConfirm, onRetake }: ImagePreviewProps) => {
     return (
       <div className="w-full max-w-2xl mx-auto text-center">
         <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded mb-4">
-          <p>Invalid image. Please try again.</p>
+          <p>Image invalide. Veuillez réessayer.</p>
         </div>
         <button
           onClick={onRetake}
           className="px-6 py-3 bg-blue-600 hover:bg-blue-700 text-white font-medium rounded-md shadow-md transition-colors"
         >
-          Try Again
+          Réessayer
         </button>
       </div>
     )
@@ -105,23 +105,23 @@ const ImagePreview = ({ image, onConfirm, onRetake }: ImagePreviewProps) => {
         <div className="p-4 bg-gray-50 border-t">
           <div className="text-center">
             <h3 className="text-lg font-medium text-gray-900 mb-2">
-              Ready to analyze?
+              Prêt à analyser?
             </h3>
             <p className="text-sm text-gray-500 mb-4">
-              This image will be analyzed for electrical infrastructure components and vegetation assessment.
+              Cette image sera analysée pour détecter les composants d'infrastructure électrique et évaluer la végétation.
             </p>
             <div className="flex justify-center space-x-4">
               <button
                 onClick={onRetake}
                 className="px-4 py-2 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none transition-colors"
               >
-                Retake
+                Reprendre
               </button>
               <button
                 onClick={onConfirm}
                 className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white font-medium rounded-md shadow-sm transition-colors"
               >
-                Analyze Image
+                Analyser l'image
               </button>
             </div>
           </div>

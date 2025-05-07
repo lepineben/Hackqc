@@ -30,13 +30,13 @@ const UploadArea = ({ onFileUpload }: UploadAreaProps) => {
   const validateFile = (file: File): boolean => {
     // Accept only image files
     if (!file.type.startsWith('image/')) {
-      setErrorMessage('Please upload an image file (JPEG, PNG, etc.).')
+      setErrorMessage('Veuillez télécharger un fichier image (JPEG, PNG, etc.).')
       return false
     }
     
     // Check for reasonable file size (10MB max)
     if (file.size > 10 * 1024 * 1024) {
-      setErrorMessage('Image is too large. Please upload an image smaller than 10MB.')
+      setErrorMessage('L\'image est trop volumineuse. Veuillez télécharger une image de moins de 10 Mo.')
       return false
     }
     
@@ -115,16 +115,16 @@ const UploadArea = ({ onFileUpload }: UploadAreaProps) => {
         </svg>
         
         <p className="text-lg font-medium mb-2">
-          {isDragging ? 'Drop image here' : 'Drag & drop an image here'}
+          {isDragging ? 'Déposez l\'image ici' : 'Glissez et déposez une image ici'}
         </p>
-        <p className="text-sm text-gray-500 mb-4">or</p>
+        <p className="text-sm text-gray-500 mb-4">ou</p>
         <button 
           type="button" 
           className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white font-medium rounded-md shadow-sm transition-colors"
         >
-          Browse Files
+          Parcourir les fichiers
         </button>
-        <p className="text-xs text-gray-400 mt-4">Accepts JPG, PNG and other image formats up to 10MB</p>
+        <p className="text-xs text-gray-400 mt-4">Accepte JPG, PNG et autres formats d'image jusqu'à 10 Mo</p>
         
         {errorMessage && (
           <p className="mt-4 text-red-500 text-sm">{errorMessage}</p>

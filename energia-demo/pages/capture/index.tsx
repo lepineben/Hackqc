@@ -40,11 +40,11 @@ export default function Capture() {
       } catch (err) {
         console.error('Error capturing image:', err)
         setHasError(true)
-        setErrorMessage('Failed to capture image. Please try again or use file upload.')
+        setErrorMessage('Échec de la capture d\'image. Veuillez réessayer ou utiliser le téléchargement de fichier.')
       }
     } else {
       setHasError(true)
-      setErrorMessage('Webcam not initialized. Please try again or use file upload.')
+      setErrorMessage('Caméra non initialisée. Veuillez réessayer ou utiliser le téléchargement de fichier.')
     }
   }, [webcamRef])
   
@@ -58,7 +58,7 @@ export default function Capture() {
     }
     reader.onerror = () => {
       setHasError(true)
-      setErrorMessage('Failed to read the file. Please try a different one.')
+      setErrorMessage('Impossible de lire le fichier. Veuillez en essayer un autre.')
     }
     reader.readAsDataURL(file)
   }
@@ -141,14 +141,14 @@ export default function Capture() {
       console.error("Error processing image:", error);
       setIsProcessing(false);
       setHasError(true);
-      setErrorMessage('Error processing image. Please try again.');
+      setErrorMessage('Erreur lors du traitement de l\'image. Veuillez réessayer.');
     }
   }
   
   const handleCameraError = useCallback(() => {
     setCaptureMethod('upload')
     setHasError(true)
-    setErrorMessage('Camera access denied or not available. Please use file upload instead.')
+    setErrorMessage('Accès à la caméra refusé ou non disponible. Veuillez utiliser le téléchargement de fichier.')
   }, [])
 
   // Animation variants
