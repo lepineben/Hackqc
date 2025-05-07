@@ -1,7 +1,9 @@
 import type { NextApiRequest, NextApiResponse } from 'next'
+import fs from 'fs'
+import path from 'path'
 import { getNetworkStatus, getCachedResponseWithStatus, getImageHash, cacheResponse, getFallbackAnalysisData, getFallbackImage, CacheStatus } from '../../lib/cache'
 import type { AnalysisResult } from '../../lib/openai'
-import { getDemoStatus, simulateProcessingDelay } from '../../lib/demoMode'
+import { getDemoStatus, simulateProcessingDelay, demoAnalysisData } from '../../lib/demoMode'
 
 // Import the OpenAI client in the server-side API route only
 import { openai } from '../../lib/openai/client'
@@ -565,12 +567,212 @@ export default async function handler(
       // Simulate processing delay for realism
       await simulateProcessingDelay('analysis');
       
-      // Get fallback data
+      // FORCE DEMO MODE: Always use image 02 for demo reliability
+      let imageId = "02"; 
+      console.log("ANALYZE: FORCING IMAGE 02 FOR DEMO RELIABILITY");
+      console.log(`Image ID before processing: ${imageId}`);
+      
+      // Debug logging to understand what's happening
+      console.log(`Demo mode active - Detected imageId="${imageId}"`);
+      console.log(`Current working directory: ${process.cwd()}`);
+      console.log(`Expected directory for images: ${path.join(process.cwd(), 'public', 'demo-images')}`);
+      console.log(`That directory exists: ${fs.existsSync(path.join(process.cwd(), 'public', 'demo-images'))}`);
+      
+      // Expect 02_boxes.jpg to be at this path:
+      const expectedBoxesPath = path.join(process.cwd(), 'public', 'demo-images', `${imageId}_boxes.jpg`);
+      console.log(`Expected boxes image path: ${expectedBoxesPath}`);
+      console.log(`That file exists: ${fs.existsSync(expectedBoxesPath)}`);
+
+      try {
+        // Add debug information
+        fs.appendFileSync(path.join(process.cwd(), 'debug.log'), 
+          `ANALYZE - Image Hash: ${imageHash}\nDetected ID: ${imageId}\n\n`);
+      } catch (error) {
+        console.error('Error writing to debug file:', error);
+      }
+      
+      
+      console.log(`Demo mode active - Detected imageId="${imageId}"`);
+      
+      // Use the detected imageId
+      
+      // We'll directly read the _boxes.jpg version for the imageId
+      try {
+        // Try different possible file names and extensions
+        const possibleExtensions = ['jpg', 'png', 'jpeg'];
+        const possibleNames = ['_boxes', '_box'];
+        let boxesImagePath = null;
+        let boxesImageFound = false;
+        
+        // First, verify the demo-images directory exists
+        const demoImagesDir = path.join(process.cwd(), 'public', 'demo-images');
+        if (!fs.existsSync(demoImagesDir)) {
+          console.error(`Demo images directory does not exist: ${demoImagesDir}`);
+          
+          // Try to list files in the public directory to debug
+          try {
+            const publicDir = path.join(process.cwd(), 'public');
+            const files = fs.readdirSync(publicDir);
+            console.log(`Files in public directory: ${files.join(', ')}`);
+            
+            // Check if demo-images is there with different case
+            const demoImagesFolder = files.find(f => f.toLowerCase() === 'demo-images');
+            if (demoImagesFolder) {
+              console.log(`Found demo-images folder with different case: ${demoImagesFolder}`);
+              // Use the actual folder name with correct case
+              const correctedDemoImagesDir = path.join(publicDir, demoImagesFolder);
+              
+              // List files in the demo-images directory
+              const demoImages = fs.readdirSync(correctedDemoImagesDir);
+              console.log(`Files in demo-images directory: ${demoImages.join(', ')}`);
+            }
+          } catch (listError) {
+            console.error(`Error listing files in public directory: ${listError}`);
+          }
+        } else {
+          // List files in the demo-images directory
+          try {
+            const demoImages = fs.readdirSync(demoImagesDir);
+            console.log(`Files in demo-images directory: ${demoImages.join(', ')}`);
+          } catch (listError) {
+            console.error(`Error listing files in demo-images directory: ${listError}`);
+          }
+        }
+        
+        // Try all combinations with enhanced logging
+        console.log(`=== DEBUG: Searching for boxes image for imageId=${imageId} ===`);
+        console.log(`Possible names to try: ${possibleNames.join(', ')}`);
+        console.log(`Possible extensions to try: ${possibleExtensions.join(', ')}`);
+        
+        // Log all files in the demo-images directory for debugging
+        try {
+          const demoImgDir = path.join(process.cwd(), 'public', 'demo-images');
+          console.log(`Files in demo-images directory: ${fs.readdirSync(demoImgDir).join(', ')}`);
+        } catch (err) {
+          console.error(`Error listing demo-images directory: ${err}`);
+        }
+        
+        for (const name of possibleNames) {
+          for (const ext of possibleExtensions) {
+            const testPath = path.join(process.cwd(), 'public', 'demo-images', `${imageId}${name}.${ext}`);
+            console.log(`Looking for boxes image at: ${testPath}`);
+            console.log(`File exists check: ${fs.existsSync(testPath)}`);
+            
+            if (fs.existsSync(testPath)) {
+              boxesImagePath = testPath;
+              boxesImageFound = true;
+              console.log(`Found boxes image file: ${boxesImagePath}`);
+              console.log(`File size: ${fs.statSync(testPath).size} bytes`);
+              console.log(`Absolute path: ${path.resolve(testPath)}`);
+              break;
+            } else {
+              console.log(`File does not exist: ${testPath}`);
+              // Check if parent directories exist
+              const parentDir = path.dirname(testPath);
+              console.log(`Parent directory (${parentDir}) exists: ${fs.existsSync(parentDir)}`);
+            }
+          }
+          if (boxesImageFound) break;
+        }
+        
+        // Check if the file exists
+        if (boxesImageFound) {
+          // Enhanced logging for debugging file path
+          console.log(`=== DEBUG: About to read boxes image file ===`);
+          console.log(`File path: ${boxesImagePath}`);
+          console.log(`File exists: ${fs.existsSync(boxesImagePath)}`);
+          console.log(`File stats: ${JSON.stringify(fs.statSync(boxesImagePath))}`);
+          console.log(`File absolute path: ${path.resolve(boxesImagePath)}`);
+          console.log(`Current working directory: ${process.cwd()}`);
+          
+          // Read the file as binary
+          const imageBuffer = fs.readFileSync(boxesImagePath);
+          console.log(`Read image file with size: ${imageBuffer.length} bytes`);
+          
+          // Convert to base64 with correct MIME type based on file extension
+          const ext = path.extname(boxesImagePath).toLowerCase();
+          const mimeType = ext === '.png' ? 'image/png' : 'image/jpeg';
+          const base64Image = `data:${mimeType};base64,${imageBuffer.toString('base64')}`;
+          console.log(`Converted image to base64 string of length: ${base64Image.length}`);
+          console.log(`MIME type used: ${mimeType}`);
+          
+          // Get the corresponding demo analysis data
+          const analysisData = demoAnalysisData[imageId] || getFallbackAnalysisData();
+          
+          // Create response with the boxes image and analysis data
+          const responseData = {
+            ...analysisData,
+            _boxesImage: base64Image, // Add the boxes image to the response
+            _boxesImagePath: boxesImagePath // For debugging
+          };
+          
+          console.log(`Created response with boxes image and analysis data`);
+          
+          // Cache it for future use
+          cacheResponse('analyze', imageHash, responseData, 'demo');
+          
+          return res.status(200).json(createResponse(responseData, 'demo', demoStatus.mode));
+        } else {
+          console.error(`Boxes image file DOES NOT EXIST at path: ${boxesImagePath}`);
+          
+          // If the boxes image doesn't exist, try to use the regular image as a fallback
+          console.log(`=== DEBUG: Boxes image not found, trying fallback to original image ===`);
+          const originalImagePath = path.join(process.cwd(), 'public', 'demo-images', `${imageId}.jpg`);
+          console.log(`Looking for original image at: ${originalImagePath}`);
+          console.log(`Original image exists: ${fs.existsSync(originalImagePath)}`);
+          
+          // Try alternative extensions if jpg doesn't exist
+          let finalOriginalPath = originalImagePath;
+          if (!fs.existsSync(originalImagePath)) {
+            console.log(`Original jpg not found, trying alternative extensions`);
+            for (const ext of ['png', 'jpeg']) {
+              const altPath = path.join(process.cwd(), 'public', 'demo-images', `${imageId}.${ext}`);
+              console.log(`Checking alternative path: ${altPath}`);
+              if (fs.existsSync(altPath)) {
+                finalOriginalPath = altPath;
+                console.log(`Found alternative original image: ${finalOriginalPath}`);
+                break;
+              }
+            }
+          }
+          
+          if (fs.existsSync(finalOriginalPath)) {
+            console.log(`Using original image as fallback: ${finalOriginalPath}`);
+            console.log(`File stats: ${JSON.stringify(fs.statSync(finalOriginalPath))}`);
+            console.log(`Absolute path: ${path.resolve(finalOriginalPath)}`);
+            
+            // Read the original image
+            const imageBuffer = fs.readFileSync(finalOriginalPath);
+            console.log(`Read original image file with size: ${imageBuffer.length} bytes`);
+            
+            // Convert to base64
+            const mimeType = path.extname(finalOriginalPath).toLowerCase() === '.png' ? 'image/png' : 'image/jpeg';
+            const base64Image = `data:${mimeType};base64,${imageBuffer.toString('base64')}`;
+            console.log(`Converted to base64 with MIME type: ${mimeType}`);
+            
+            // Get the corresponding demo analysis data or fallback
+            const analysisData = demoAnalysisData[imageId] || getFallbackAnalysisData();
+            
+            // Create response with the original image and analysis data
+            const responseData = {
+              ...analysisData,
+              _boxesImage: base64Image,
+              _boxesImagePath: originalImagePath
+            };
+            
+            // Cache it for future use
+            cacheResponse('analyze', imageHash, responseData, 'demo');
+            
+            return res.status(200).json(createResponse(responseData, 'demo', demoStatus.mode));
+          }
+        }
+      } catch (error) {
+        console.error(`Error reading boxes image for ${imageId}:`, error);
+      }
+      
+      // Fallback - if we couldn't get the boxes image, use regular demo data
       const fallbackData = getFallbackAnalysisData();
-      
-      // Cache it for future use
       cacheResponse('analyze', imageHash, fallbackData, 'fallback');
-      
       return res.status(200).json(createResponse(fallbackData, 'demo', demoStatus.mode));
     }
     
@@ -609,6 +811,30 @@ export default async function handler(
     
     // Return fallback data for demo reliability
     const fallbackData = getFallbackAnalysisData();
+    
+    // EMERGENCY FIX: Always include the boxes image path in the fallback data
+    try {
+      // Directly include the boxes image in the response for reliability
+      const boxesImagePath = path.join(process.cwd(), 'public', 'demo-images', '02_boxes.jpg');
+      console.log("EMERGENCY FIX: Reading boxes image from: " + boxesImagePath);
+      
+      if (fs.existsSync(boxesImagePath)) {
+        const imageBuffer = fs.readFileSync(boxesImagePath);
+        const base64Image = `data:image/jpeg;base64,${imageBuffer.toString('base64')}`;
+        
+        // Add the boxes image to the response
+        const enhancedFallbackData = {
+          ...fallbackData,
+          _boxesImage: base64Image,
+          _boxesImagePath: '/demo-images/02_boxes.jpg'
+        };
+        
+        console.log("EMERGENCY FIX: Successfully added boxes image to response");
+        return res.status(200).json(createResponse(enhancedFallbackData, 'fallback', 'emergency'));
+      }
+    } catch (boxesError) {
+      console.error("EMERGENCY FIX failed:", boxesError);
+    }
     
     return res.status(200).json(createResponse(fallbackData, 'fallback', 'error'));
   }

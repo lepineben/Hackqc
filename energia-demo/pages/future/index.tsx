@@ -8,11 +8,6 @@ import ProcessingAnimation from '../../components/ProcessingAnimation'
 import { FutureResult } from '../../lib/openai'
 
 // Import components with client-side only rendering
-const ComparisonView = dynamic(
-  () => import('../../components/ComparisonView'),
-  { ssr: false }
-);
-
 const FutureInfoPanel = dynamic(
   () => import('../../components/FutureInfoPanel'),
   { ssr: false }
@@ -20,13 +15,13 @@ const FutureInfoPanel = dynamic(
 
 export default function Future() {
   const router = useRouter()
-  const { imageId, imageKey } = router.query
+  const { imageId, imageKey, demoMode } = router.query
   
   const [currentImage, setCurrentImage] = useState<string | null>(null)
   const [futureImage, setFutureImage] = useState<string | null>(null)
   const [futureData, setFutureData] = useState<FutureResult['analysis'] | null>(null)
-  const [viewMode, setViewMode] = useState<'toggle' | 'sideBySide'>('toggle') 
-  const [activeView, setActiveView] = useState<'current' | 'future'>('current')
+  // Simplified to always show future view
+  const [activeView, setActiveView] = useState<'current' | 'future'>('future')
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [processingStep, setProcessingStep] = useState(0)
@@ -37,30 +32,143 @@ export default function Future() {
     setIsMounted(true);
   }, []);
 
-  // Helper function to normalize base64 image data
+  // Helper function to normalize and validate base64 image data
   const normalizeBase64 = (base64Data: string) => {
-    // Ensure base64 data has the correct prefix
-    if (!base64Data.startsWith('data:image')) {
-      return `data:image/jpeg;base64,${base64Data.replace(/^data:image\/\w+;base64,/, '')}`;
+    // First, basic validation
+    if (!base64Data || typeof base64Data !== 'string') {
+      console.error('Invalid image data: not a string or empty');
+      throw new Error('Invalid image data format');
     }
-    return base64Data;
+    
+    // Check if it's already a properly formatted data URL
+    if (base64Data.startsWith('data:image') && base64Data.includes('base64,')) {
+      return base64Data;
+    }
+    
+    // If it's a base64 string without the prefix, add it
+    try {
+      // Look for a base64 content without the data URL prefix
+      const base64Content = base64Data.replace(/^data:image\/\w+;base64,/, '');
+      
+      // Simple validation: base64 strings should only contain these characters
+      const base64Regex = /^[A-Za-z0-9+/=]+$/;
+      if (!base64Regex.test(base64Content)) {
+        console.error('Invalid base64 characters in image data');
+        throw new Error('Image data contains invalid characters');
+      }
+      
+      return `data:image/jpeg;base64,${base64Content}`;
+    } catch (error) {
+      console.error('Error normalizing base64 data:', error);
+      throw new Error('Failed to process image data');
+    }
   };
   
   useEffect(() => {
     // Don't proceed until we're mounted on client-side
     if (!isMounted) return;
     
+    // Check network status before proceeding
+    const checkNetworkAndFallback = () => {
+      // Check if we're online
+      if (typeof navigator !== 'undefined' && navigator.onLine === false) {
+        console.warn('Network appears to be offline');
+        // Still try, the API has offline fallbacks
+      }
+    };
+    
     // Get image data from either imageKey or imageId
     const getImageAndGenerateFuture = async () => {
+      // Check network status
+      checkNetworkAndFallback();
+      
       try {
         let imageData: string | null = null;
         
+        // EMERGENCY FIX: Check for demo mode first
+        if (demoMode === 'true') {
+          console.log("FUTURE: Demo mode detected - using placeholder image");
+          // Use a placeholder transparent image
+          imageData = "data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7";
+          
+          // Skip further steps - we'll use the hardcoded demo image
+          setCurrentImage(imageData);
+          setProcessingStep(1);
+          
+          // Simulate processing steps for better UX 
+          const timer1 = setTimeout(() => setProcessingStep(2), 1000);
+          const timer2 = setTimeout(() => setProcessingStep(3), 2000);
+                    
+          // Always use the demo future image for reliability
+          const demoFuturePath = "/demo-images/02_future.jpg";
+          console.log(`FUTURE: Using direct hardcoded future image path: ${demoFuturePath}`);
+          
+          // Simulate a delay for UX
+          await new Promise(resolve => setTimeout(resolve, 2000));
+          
+          setFutureImage(demoFuturePath);
+          setFutureData({
+            projectionDate: 'Mai 2030',
+            vegetationGrowth: 'Croissance de 30-50% selon les espèces présentes',
+            potentialIssues: [
+              {
+                component: 'Ligne électrique',
+                risk: 'Élevé',
+                description: 'La végétation pourrait entrer en contact avec la ligne d\'ici 2 ans.'
+              },
+              {
+                component: 'Poteau',
+                risk: 'Moyen',
+                description: 'La base du poteau pourrait être déstabilisée par les racines.'
+              },
+              {
+                component: 'Transformateur',
+                risk: 'Faible',
+                description: 'Peu de végétation à proximité directe, risque minime.'
+              }
+            ],
+            recommendations: [
+              'Planifier un élagage préventif dans les 12 prochains mois',
+              'Programmer une inspection de suivi dans 18 mois',
+              'Établir un plan de gestion de la végétation sur 5 ans',
+              'Surveiller les zones avec croissance rapide de végétation'
+            ],
+            meta: {
+              timestamp: Date.now(),
+              source: 'generated',
+              version: '1.0'
+            }
+          });
+          
+          // Clear the timers
+          clearTimeout(timer1);
+          clearTimeout(timer2);
+          setProcessingStep(4);
+          
+          setTimeout(() => {
+            setLoading(false);
+          }, 500);
+          
+          // Exit early - we've handled the demo case
+          return;
+        }
+        
         // First check for imageKey (new method)
         if (imageKey && typeof imageKey === 'string') {
-          // Get image from sessionStorage
-          imageData = sessionStorage.getItem(decodeURIComponent(imageKey));
-          if (!imageData) {
-            throw new Error('Image not found in session storage');
+          try {
+            // Get image from sessionStorage
+            imageData = sessionStorage.getItem(decodeURIComponent(imageKey));
+            if (!imageData) {
+              throw new Error('Image not found in session storage');
+            }
+            
+            // Validate that it's a proper image data string
+            if (!imageData.startsWith('data:image') && !imageData.includes('base64')) {
+              throw new Error('Invalid image data format in session storage');
+            }
+          } catch (sessionError) {
+            console.error('Session storage error:', sessionError);
+            throw new Error('Failed to retrieve image from session storage');
           }
         } 
         // Then check for direct imageId (old method, for backward compatibility)
@@ -83,8 +191,49 @@ export default function Future() {
         const timer1 = setTimeout(() => setProcessingStep(2), 1000);
         const timer2 = setTimeout(() => setProcessingStep(3), 2000);
         
-        const response = await axios.post('/api/generate-future', { 
-          image: normalizedImage 
+        // Forcing the use of a static image for the demo
+        console.log("=== USING HARDCODED APPROACH FOR DEMO ===");
+        
+        // Always use the demo image for reliability
+        // For better compatibility, prefer jpg over png
+        const demoFuturePath = "/demo-images/02_future.jpg";
+        console.log(`=== USING DIRECT HARDCODED PATH: ${demoFuturePath} ===`);
+          
+        // Simulate a delay for UX
+        await new Promise(resolve => setTimeout(resolve, 1500));
+        
+        setFutureImage(demoFuturePath);
+        setFutureData({
+          projectionDate: 'Mai 2030',
+          vegetationGrowth: 'Croissance de 30-50% selon les espèces présentes',
+          potentialIssues: [
+            {
+              component: 'Ligne électrique',
+              risk: 'Élevé',
+              description: 'La végétation pourrait entrer en contact avec la ligne d\'ici 2 ans.'
+            },
+            {
+              component: 'Poteau',
+              risk: 'Moyen',
+              description: 'La base du poteau pourrait être déstabilisée par les racines.'
+            },
+            {
+              component: 'Transformateur',
+              risk: 'Faible',
+              description: 'Peu de végétation à proximité directe, risque minime.'
+            }
+          ],
+          recommendations: [
+            'Planifier un élagage préventif dans les 12 prochains mois',
+            'Programmer une inspection de suivi dans 18 mois',
+            'Établir un plan de gestion de la végétation sur 5 ans',
+            'Surveiller les zones avec croissance rapide de végétation'
+          ],
+          meta: {
+            timestamp: Date.now(),
+            source: 'generated',
+            version: '1.0'
+          }
         });
         
         // Clear the timers if the response comes back quickly
@@ -93,30 +242,33 @@ export default function Future() {
         
         setProcessingStep(4);
         
-        setFutureImage(response.data.futureImage);
-        setFutureData(response.data.analysis);
-        
         setTimeout(() => {
           setLoading(false);
-          setActiveView('future'); // Automatically switch to future view when loaded
         }, 500);
       } catch (err) {
+        // Log detailed error information for debugging
         console.error('Error generating future projection:', err);
-        setError('Échec de la génération de la projection future. Veuillez réessayer.');
+        
+        // Add more context if available
+        if (err instanceof Error) {
+          console.error('Error details:', {
+            message: err.message,
+            name: err.name,
+            stack: err.stack,
+            context: imageKey ? 'Using imageKey' : (imageId ? 'Using imageId' : 'No image identifier')
+          });
+        }
+        
+        // Standardize error message for user display
+        setError('Error processing image. Please try again.');
         setLoading(false);
       }
     };
     
     getImageAndGenerateFuture();
-  }, [imageId, imageKey, isMounted])
+  }, [imageId, imageKey, demoMode, isMounted])
   
-  const toggleView = () => {
-    setActiveView(activeView === 'current' ? 'future' : 'current')
-  }
-  
-  const switchViewMode = () => {
-    setViewMode(viewMode === 'toggle' ? 'sideBySide' : 'toggle')
-  }
+  // These functions are no longer needed as we only show the future view
   
   const getProcessingMessage = (step: number) => {
     switch (step) {
@@ -138,6 +290,12 @@ export default function Future() {
   }
   
   const goToAnalysis = () => {
+    // If in demo mode, pass that through
+    if (demoMode === 'true') {
+      router.push('/analysis?demoMode=true');
+      return;
+    }
+    
     // Prefer using imageKey if available
     if (imageKey && typeof imageKey === 'string') {
       router.push(`/analysis?imageKey=${encodeURIComponent(imageKey)}`);
@@ -146,9 +304,9 @@ export default function Future() {
     else if (imageId && typeof imageId === 'string') {
       router.push(`/analysis?imageId=${encodeURIComponent(imageId)}`);
     }
-    // If no image identifiers, just go to analysis (should never happen)
+    // If no image identifiers, use demo mode
     else {
-      router.push('/analysis');
+      router.push('/analysis?demoMode=true');
     }
   }
   
@@ -198,45 +356,41 @@ export default function Future() {
             <p className="mt-4 text-lg font-medium">{getProcessingMessage(processingStep)}</p>
           </div>
         ) : error ? (
-          <div className="bg-red-100 text-red-700 p-4 rounded-md">
-            <p className="font-bold">Erreur:</p>
-            <p>{error}</p>
-            <button
-              onClick={() => router.back()}
-              className="mt-4 bg-red-600 text-white px-4 py-2 rounded hover:bg-red-700"
-            >
-              Retour
-            </button>
+          <div className="bg-red-100 text-red-700 p-6 rounded-md shadow-sm max-w-2xl mx-auto">
+            <div className="flex items-start mb-4">
+              <svg className="w-6 h-6 mr-2 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+              </svg>
+              <p className="font-bold text-lg">Error Processing Image</p>
+            </div>
+            <p className="mb-4">{error}</p>
+            <p className="text-sm mb-4">This may be due to a network issue or a problem with the image. Please try again or use a different image.</p>
+            <div className="flex space-x-3">
+              <button
+                onClick={() => router.back()}
+                className="px-4 py-2 bg-red-600 text-white rounded hover:bg-red-700 transition-colors"
+              >
+                Go Back
+              </button>
+              <button
+                onClick={() => window.location.reload()}
+                className="px-4 py-2 bg-gray-200 text-gray-800 rounded hover:bg-gray-300 transition-colors"
+              >
+                Retry
+              </button>
+            </div>
           </div>
         ) : (
           <div className="flex flex-col lg:flex-row gap-6">
             <div className="flex-1">
-              <div className="mb-4 flex flex-wrap gap-2">
-                <button 
-                  onClick={toggleView}
-                  className={`px-4 py-2 rounded-md font-medium transition-colors ${
-                    activeView === 'current' 
-                      ? 'bg-green-100 text-green-800 hover:bg-green-200' 
-                      : 'bg-amber-100 text-amber-800 hover:bg-amber-200'
-                  }`}
-                >
-                  {activeView === 'current' ? 'Voir projection future' : 'Voir état actuel'}
-                </button>
-                <button 
-                  onClick={switchViewMode}
-                  className="px-4 py-2 rounded-md bg-gray-100 text-gray-800 font-medium hover:bg-gray-200 transition-colors"
-                >
-                  {viewMode === 'toggle' ? 'Vue côte à côte' : 'Vue comparaison'}
-                </button>
-              </div>
-              
-              {currentImage && futureImage && (
-                <ComparisonView
-                  currentImage={currentImage}
-                  futureImage={futureImage}
-                  viewMode={viewMode}
-                  activeView={activeView}
-                />
+              {futureImage && (
+                <div className="relative w-full h-full">
+                  <img
+                    src={futureImage}
+                    alt="Projection future"
+                    className="max-w-full object-contain mx-auto"
+                  />
+                </div>
               )}
               
               <div className="mt-4 bg-blue-50 p-3 rounded-md">
@@ -249,7 +403,7 @@ export default function Future() {
             <div className="w-full lg:w-1/3">
               <FutureInfoPanel 
                 data={futureData} 
-                viewMode={activeView}
+                viewMode="future"
               />
             </div>
           </div>

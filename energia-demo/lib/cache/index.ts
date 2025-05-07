@@ -61,6 +61,20 @@ const preCachedResponses = {
 export function initializeCache(): void {
   const now = Date.now();
   
+  // Force clear cache
+  console.log("FORCED CACHE CLEAR ON INIT");
+  if (typeof localStorage !== 'undefined') {
+    // Clear all energia-related items from localStorage
+    Object.keys(localStorage).forEach(key => {
+      if (key.startsWith('energia_') || key.includes('future') || key.includes('analyze')) {
+        console.log(`Clearing cache item: ${key}`);
+        localStorage.removeItem(key);
+      }
+    });
+  }
+  // Clear in-memory cache
+  clearCache();
+  
   // Add pre-cached responses to cache
   Object.entries(preCachedResponses.analyze).forEach(([key, value]) => {
     const expirationTime = now + CACHE_CONFIG.TTL.demo;
