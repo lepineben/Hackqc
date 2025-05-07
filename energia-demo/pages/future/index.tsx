@@ -95,16 +95,17 @@ export default function Future() {
           setCurrentImage(imageData);
           setProcessingStep(1);
           
-          // Simulate processing steps for better UX 
-          const timer1 = setTimeout(() => setProcessingStep(2), 1000);
-          const timer2 = setTimeout(() => setProcessingStep(3), 2000);
+          // Simulate processing steps for better UX with longer delays
+          const timer1 = setTimeout(() => setProcessingStep(2), 2000);
+          const timer2 = setTimeout(() => setProcessingStep(3), 4000);
+          const timer3 = setTimeout(() => setProcessingStep(4), 6000);
                     
           // Always use the demo future image for reliability
           const demoFuturePath = "/demo-images/02_future.jpg";
           console.log(`FUTURE: Using direct hardcoded future image path: ${demoFuturePath}`);
           
-          // Simulate a delay for UX
-          await new Promise(resolve => setTimeout(resolve, 2000));
+          // Simulate a longer delay for UX to show the animation better
+          await new Promise(resolve => setTimeout(resolve, 7000));
           
           setFutureImage(demoFuturePath);
           setFutureData({

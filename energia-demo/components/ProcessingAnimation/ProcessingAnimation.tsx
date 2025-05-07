@@ -17,11 +17,11 @@ const ProcessingAnimation: React.FC<ProcessingAnimationProps> = ({
   const [currentStep, setCurrentStep] = useState(step)
   
   const defaultSteps = [
-    'Analyzing electrical components...',
-    'Detecting vegetation features...',
-    'Assessing infrastructure conditions...',
-    'Calculating vegetation density...',
-    'Preparing detailed analysis...'
+    'Analyse des composants électriques...',
+    'Détection des caractéristiques de végétation...',
+    'Évaluation de l\'état des infrastructures...',
+    'Calcul de la densité de végétation...',
+    'Préparation de l\'analyse détaillée...'
   ]
   
   const steps = customSteps || defaultSteps
@@ -39,9 +39,9 @@ const ProcessingAnimation: React.FC<ProcessingAnimationProps> = ({
   useEffect(() => {
     if (!autoProgress) return
     
-    // Simulate a 3-second processing time with steps
-    const totalDuration = 3000 // 3 seconds total
-    const incrementInterval = 50 // Update progress every 50ms
+    // Simulate a longer processing time with steps
+    const totalDuration = 7000 // 7 seconds total
+    const incrementInterval = 70 // Update progress every 70ms
     const totalIncrements = totalDuration / incrementInterval
     const progressPerIncrement = 100 / totalIncrements
     
@@ -94,7 +94,7 @@ const ProcessingAnimation: React.FC<ProcessingAnimationProps> = ({
       </div>
       
       <h3 className="text-xl font-semibold text-gray-800 mb-3">
-        Processing Your Image
+        Traitement de votre image
       </h3>
       
       <div className="mb-4">
@@ -109,12 +109,12 @@ const ProcessingAnimation: React.FC<ProcessingAnimationProps> = ({
           ></div>
         </div>
         <p className="text-xs text-gray-500 mt-1">
-          {Math.round(progress)}% complete
+          {Math.round(progress)}% complété
         </p>
       </div>
       
       <p className="text-sm text-gray-600">
-        Please wait while we analyze your image. This might take a few moments.
+        Veuillez patienter pendant l'analyse de votre image. Cela peut prendre quelques instants.
       </p>
       
       {/* Visual elements representing analysis */}

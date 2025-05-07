@@ -92,8 +92,11 @@ export default function Analysis() {
             annotations: [] // No annotations needed with boxed image
           };
           
-          setAnalysisData(demoDemoData);
-          setLoading(false);
+          // Simulate a longer processing time for better animation experience
+          setTimeout(() => {
+            setAnalysisData(demoDemoData);
+            setLoading(false);
+          }, 4000); // 4 second delay to show the animation
           
           // Exit early - we're using the demo image
           return;
