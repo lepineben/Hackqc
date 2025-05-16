@@ -37,20 +37,6 @@ export default async function handler(
     
     // Generate image hash for cache lookup
     const imageHash = getImageHash(image);
-    
-    // Create a response function with metadata
-    const createResponse = (data: FutureResult, source: string, status: string) => {
-      const responseWithMeta: FutureResponseWithMeta = {
-        ...data,
-        _meta: {
-          source,
-          status,
-          processTime: Date.now() - startTime
-        }
-      };
-      return responseWithMeta;
-    };
-    
     // Try to get cached response first
     const { status: cacheStatus, data: cachedData } = getCachedResponseWithStatus('future', imageHash);
     
