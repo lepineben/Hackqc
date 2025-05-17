@@ -384,18 +384,32 @@ function cleanCacheCategory(type: CacheType, aggressive: boolean): void {
 }
 
 // Generate hash for an image
-export function getImageHash(imageData: string): string {
-  // For base64 images, hash the data
+export async function getImageHash(imageData: string): Promise<string> {
   try {
-    // Skip the metadata part of base64 for more consistent hashing
-    const base64Data = imageData.includes('base64,') 
-      ? imageData.split('base64,')[1] 
+    const base64Data = imageData.includes('base64,')
+      ? imageData.split('base64,')[1]
       : imageData;
-      
+
+    if (typeof window !== 'undefined' && window.crypto?.subtle) {
+      const data = new TextEncoder().encode(base64Data);
+      const digest = await window.crypto.subtle.digest('SHA-256', data);
+      return Array.from(new Uint8Array(digest))
+        .map(b => b.toString(16).padStart(2, '0'))
+        .join('');
+    }
+
     return crypto.createHash('md5').update(base64Data).digest('hex');
   } catch (error) {
     console.error('Error generating image hash:', error);
-    // Fallback to a less reliable but safe method
+
+    if (typeof window !== 'undefined' && window.crypto?.subtle) {
+      const data = new TextEncoder().encode(String(Date.now() + Math.random()));
+      const digest = await window.crypto.subtle.digest('SHA-256', data);
+      return Array.from(new Uint8Array(digest))
+        .map(b => b.toString(16).padStart(2, '0'))
+        .join('');
+    }
+
     return crypto.createHash('md5').update(String(Date.now() + Math.random())).digest('hex');
   }
 }
@@ -512,7 +526,7 @@ export async function prewarmCache(testImages: { url: string, data: string, type
   for (const image of testImages) {
     try {
       // Generate hash for the image
-      const imageHash = getImageHash(image.data);
+      const imageHash = await getImageHash(image.data);
       
       // Cache the response with specific source
       cacheResponse(image.type, imageHash, image.responseData, 'demo');
@@ -527,7 +541,7 @@ export async function prewarmCache(testImages: { url: string, data: string, type
 }
 
 // Create or update demo data
-export function createDemoData(demoImages: { url: string, data: string, analyzeData: any, futureData: any }[]): void {
+export async function createDemoData(demoImages: { url: string, data: string, analyzeData: any, futureData: any }[]): Promise<void> {
   if (typeof window === 'undefined') return;
   
   console.log(`Creating demo data for ${demoImages.length} images...`);
@@ -535,7 +549,7 @@ export function createDemoData(demoImages: { url: string, data: string, analyzeD
   try {
     for (const image of demoImages) {
       // Generate hash for the image
-      const imageHash = getImageHash(image.data);
+      const imageHash = await getImageHash(image.data);
       
       // Store image data in localStorage for quick retrieval
       localStorage.setItem(`demoImage_${imageHash}`, image.data);
