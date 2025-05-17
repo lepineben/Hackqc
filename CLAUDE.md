@@ -9,7 +9,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ## Development Setup
 
 ### Environment Setup
-- The project is a Next.js React application located in `/energia-demo` directory
+- The project is a Next.js React application **built with TypeScript** located in `/energia-demo` directory
 - Install dependencies with `npm install --legacy-peer-deps` (legacy flag needed for react-image-annotation)
 - Run development server with `npm run dev`
 - Build for production with `npm run build`
@@ -33,12 +33,12 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 Once implemented, the project will follow this structure:
 - `/components` - Reusable React components
 - `/pages` - Next.js page components and API routes:
-  - `/index.js` - Home screen with map
-  - `/capture.js` - Camera/upload interface
-  - `/analysis.js` - Analysis results screen
-  - `/future.js` - Future projection view
-  - `/api/analyze-image.js` - API route for image analysis
-  - `/api/generate-future.js` - API route for future projection
+  - `/index.tsx` - Home screen with map
+  - `/capture.tsx` - Camera/upload interface
+  - `/analysis.tsx` - Analysis results screen
+  - `/future.tsx` - Future projection view
+  - `/api/analyze-image.tsx` - API route for image analysis
+  - `/api/generate-future.tsx` - API route for future projection
 - `/public` - Static assets
 - `/lib` - Utility functions, including caching mechanisms
 - `/styles` - CSS styles
