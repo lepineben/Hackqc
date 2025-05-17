@@ -738,25 +738,27 @@ export async function initializeDemoMode(): Promise<void> {
         }
         
         // Process this image
-        const processPromise = processDemo(imagePath, imageId).then(() => {
-          processedImages.add(imageId);
-          processedThisSession.push(imageId);
-        }).catch(err => {
-          console.error(`Error processing demo image ${imageId}:`, err);
-        });
-        
+        const processPromise = processDemo(imagePath, imageId)
+          .then(() => {
+            processedImages.add(imageId);
+            processedThisSession.push(imageId);
+          })
+          .catch(err => {
+            console.error(`Error processing demo image ${imageId}:`, err);
+          });
+
         activePromises.push(processPromise);
+        processPromise.finally(() => {
+          const index = activePromises.indexOf(processPromise);
+          if (index !== -1) {
+            activePromises.splice(index, 1);
+          }
+        });
       }
-      
+
       // Wait for at least one promise to complete if any are active
       if (activePromises.length > 0) {
         await Promise.race(activePromises);
-        // Remove completed promises
-        for (let i = activePromises.length - 1; i >= 0; i--) {
-          if (activePromises[i].isFulfilled || activePromises[i].isRejected) {
-            activePromises.splice(i, 1);
-          }
-        }
       }
     }
     
