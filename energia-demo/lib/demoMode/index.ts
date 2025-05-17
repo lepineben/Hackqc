@@ -1,5 +1,19 @@
-import path from 'path';
 import { getImageHash, cacheResponse, prewarmCache, createDemoData, CacheType, getNetworkStatus } from '../cache';
+
+// Minimal path helpers to avoid Node "path" dependency
+function basename(filePath: string, ext?: string): string {
+  const base = filePath.substring(filePath.lastIndexOf('/') + 1);
+  if (ext && base.toLowerCase().endsWith(ext.toLowerCase())) {
+    return base.slice(0, -ext.length);
+  }
+  return base;
+}
+
+function extname(filePath: string): string {
+  const base = filePath.substring(filePath.lastIndexOf('/') + 1);
+  const dot = base.lastIndexOf('.');
+  return dot !== -1 ? base.slice(dot) : '';
+}
 
 // Demo storage keys - must be declared before importing anything that references them
 export const DEMO_MODE_KEY = 'energia_demo_mode';
@@ -729,7 +743,7 @@ export async function initializeDemoMode(): Promise<void> {
       // Fill up active promises if possible
       while (imageQueue.length > 0 && activePromises.length < concurrency) {
         const imagePath = imageQueue.shift()!;
-        const imageId = path.basename(imagePath, path.extname(imagePath));
+        const imageId = basename(imagePath, extname(imagePath));
         
         // Skip already processed images
         if (processedImages.has(imageId)) {
@@ -803,7 +817,7 @@ async function processDemo(imagePath: string, imageId: string): Promise<void> {
   }
   
   // Hash the image for cache lookup
-  const imageHash = getImageHash(base64Data);
+  const imageHash = await getImageHash(base64Data);
   
   // Check if we need to generate a future image version
   let futureImageData = base64Data; // Default to original image
@@ -866,7 +880,7 @@ async function processDemo(imagePath: string, imageId: string): Promise<void> {
   }
   
   // Hash the future image
-  const futureImageHash = getImageHash(futureImageData);
+  const futureImageHash = await getImageHash(futureImageData);
   
   // Prepare data for both analysis and future projections
   const demoImages = [];
@@ -1209,7 +1223,7 @@ export const demoController = {
     
     // Get image ID from the path
     const imagePath = scenarioData.imagePath;
-    const imageId = path.basename(imagePath, path.extname(imagePath));
+    const imageId = basename(imagePath, extname(imagePath));
     
     // Get the future image for this ID
     return getFutureDemoImageById(imageId);
@@ -1222,7 +1236,7 @@ export const demoController = {
     
     // Get image ID from the path
     const imagePath = scenarioData.imagePath;
-    const imageId = path.basename(imagePath, path.extname(imagePath));
+    const imageId = basename(imagePath, extname(imagePath));
     
     return {
       current: getDemoImageById(imageId),

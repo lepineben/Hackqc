@@ -36,7 +36,7 @@ export default async function handler(
     const networkStatus = getNetworkStatus();
     
     // Generate image hash for cache lookup
-    const imageHash = getImageHash(image);
+    const imageHash = await getImageHash(image);
     
     // Create a response function with metadata
     const createResponse = (data: AnalysisResult, source: string, status: string) => {

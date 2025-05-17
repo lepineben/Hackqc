@@ -155,7 +155,7 @@ export function generateAnnotations(components: OpenAIComponent[]): OpenAIAnnota
 // Function to analyze an image using OpenAI Vision API
 export async function analyzeImage(imageData: string): Promise<AnalysisResult> {
   // Check cache first
-  const imageHash = getImageHash(imageData);
+  const imageHash = await getImageHash(imageData);
   const cachedResult = getCachedResponse('analyze', imageHash);
   
   if (cachedResult) {
@@ -229,7 +229,7 @@ export async function analyzeImage(imageData: string): Promise<AnalysisResult> {
 // Function to generate a future projection using OpenAI
 export async function generateFuture(imageData: string): Promise<FutureResult> {
   // Check cache first
-  const imageHash = getImageHash(imageData);
+  const imageHash = await getImageHash(imageData);
   const cachedResult = getCachedResponse('future', imageHash);
   
   if (cachedResult) {
@@ -319,7 +319,7 @@ export async function generateFuture(imageData: string): Promise<FutureResult> {
 export async function generateFutureImage(imageData: string): Promise<string> {
   try {
     // Check cache first using a hash of the input image plus a "future" prefix
-    const imageHash = getImageHash(`future_${imageData}`);
+    const imageHash = await getImageHash(`future_${imageData}`);
     const cachedResult = getCachedResponse('futureImage', imageHash);
     
     if (cachedResult) {
